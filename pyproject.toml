@@ -1,0 +1,18 @@
+[project]
+name = "ai-swarm-village"
+version = "0.1.0"
+description = "package to analyse transcripts of multi-agent collusion"
+authors = [
+    {name = "ok3ks",email = "freelanceokeks@gmail.com"}
+]
+requires-python = ">=3.12"
+dependencies = [
+    "polars (>=1.44.2,<2.0.0)",
+    "huggingface (>=0.0.1,<0.0.2)",
+    "datasets (>=5.0.1,<6.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
