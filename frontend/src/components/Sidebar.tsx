@@ -22,6 +22,8 @@ interface Props {
   rooms: ChatRoomRecord[];
   selectedRoomId: string | null;
   onSelectRoom: (r: ChatRoomRecord) => void;
+  selectedEventIds: Set<string>;
+  onToggleEvent: (id: string) => void;
 }
 
 // Numeric-id corpora (swarmtraces) don't carry real timestamps, but ids were
@@ -72,6 +74,8 @@ export function Sidebar({
   rooms,
   selectedRoomId,
   onSelectRoom,
+  selectedEventIds,
+  onToggleEvent,
 }: Props) {
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<string | null>(null);
@@ -333,6 +337,9 @@ export function Sidebar({
           : `${filtered.length.toLocaleString()} matching, oldest → newest${
               filtered.length > RENDER_CAP ? `, showing first ${RENDER_CAP}` : ""
             }`}
+        {source === "events" && selectedEventIds.size > 0 && (
+          <span className="selected-count"> · {selectedEventIds.size} selected</span>
+        )}
       </div>
 
       <ul className="transcript-list">
@@ -355,6 +362,16 @@ export function Sidebar({
               className={`timeline-item ${r.id === selectedId ? "selected" : ""}`}
               onClick={() => onSelect(r)}
             >
+              {source === "events" && (
+                <input
+                  type="checkbox"
+                  className="turn-select"
+                  checked={selectedEventIds.has(r.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={() => onToggleEvent(r.id)}
+                  title="Select for batch summarize"
+                />
+              )}
               <div className="rail">
                 <span className="rail-line" style={{ background: lane }} />
                 <span className="rail-dot" style={{ background: lane, borderColor: lane }} />

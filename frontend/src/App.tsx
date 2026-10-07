@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { AgentDetail } from "./components/AgentDetail";
+import { EventBatchBar } from "./components/EventBatchBar";
 import { MetadataPanel } from "./components/MetadataPanel";
 import { RoomDetail } from "./components/RoomDetail";
 import { Sidebar } from "./components/Sidebar";
@@ -20,6 +21,7 @@ function App() {
   const [selectedAgent, setSelectedAgent] = useState<AgentRecord | null>(null);
   const [rooms, setRooms] = useState<ChatRoomRecord[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<ChatRoomRecord | null>(null);
+  const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchManifest()
@@ -44,6 +46,20 @@ function App() {
       ? { rows: claudeCodeRows, loadedChunks: 1, totalChunks: 1, loading: !manifest }
       : chunkedIndex;
 
+  const selectedEventRows = useMemo(
+    () => index.rows.filter((r) => selectedEventIds.has(r.id)),
+    [index.rows, selectedEventIds]
+  );
+
+  const toggleEvent = (id: string) => {
+    setSelectedEventIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   if (manifestError) {
     return (
       <div className="app-error">
@@ -67,6 +83,7 @@ function App() {
           setSelected(null);
           setSelectedAgent(null);
           setSelectedRoom(null);
+          setSelectedEventIds(new Set());
         }}
         rows={index.rows}
         loadedChunks={index.loadedChunks}
@@ -84,6 +101,8 @@ function App() {
         rooms={rooms}
         selectedRoomId={selectedRoom?.id ?? null}
         onSelectRoom={setSelectedRoom}
+        selectedEventIds={selectedEventIds}
+        onToggleEvent={toggleEvent}
       />
       <main className="main-pane">
         {source === "agents" ? (
@@ -101,6 +120,9 @@ function App() {
                   <Timeline rows={index.rows} selectedId={selected?.id ?? null} onSelect={setSelected} />
                 )}
               </div>
+            )}
+            {source === "events" && (
+              <EventBatchBar selectedRows={selectedEventRows} onClear={() => setSelectedEventIds(new Set())} />
             )}
             <TranscriptThread summary={selected} />
           </>
