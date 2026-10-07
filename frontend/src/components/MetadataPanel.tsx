@@ -24,6 +24,12 @@ export function MetadataPanel({ summary }: { summary: TranscriptSummary | null }
             <dd>{summary.cite}</dd>
           </>
         )}
+        {summary.agentName && (
+          <>
+            <dt>Agent</dt>
+            <dd>{summary.agentName}</dd>
+          </>
+        )}
         {summary.agentId && (
           <>
             <dt>Agent ID</dt>

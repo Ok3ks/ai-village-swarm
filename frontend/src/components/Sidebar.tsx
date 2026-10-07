@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import type { SourceKind, TranscriptSummary } from "../lib/types";
+import { useEffect, useMemo, useState } from "react";
+import type { AgentRecord, ChatRoomRecord, SourceKind, TranscriptSummary } from "../lib/types";
 
 const RENDER_CAP = 250;
 
@@ -13,8 +13,15 @@ interface Props {
   treesCount: number;
   orphansCount: number;
   claudeCodeCount: number;
+  eventsCount: number;
   selectedId: string | null;
   onSelect: (s: TranscriptSummary) => void;
+  agents: AgentRecord[];
+  selectedAgentId: string | null;
+  onSelectAgent: (a: AgentRecord) => void;
+  rooms: ChatRoomRecord[];
+  selectedRoomId: string | null;
+  onSelectRoom: (r: ChatRoomRecord) => void;
 }
 
 // Numeric-id corpora (swarmtraces) don't carry real timestamps, but ids were
@@ -56,11 +63,25 @@ export function Sidebar({
   treesCount,
   orphansCount,
   claudeCodeCount,
+  eventsCount,
   selectedId,
   onSelect,
+  agents,
+  selectedAgentId,
+  onSelectAgent,
+  rooms,
+  selectedRoomId,
+  onSelectRoom,
 }: Props) {
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<string | null>(null);
+  const [agentFilter, setAgentFilter] = useState<string | null>(null);
+  const [participationFilter, setParticipationFilter] = useState<"all" | "participating" | "not">("all");
+
+  useEffect(() => {
+    setAgentFilter(null);
+    setKindFilter(null);
+  }, [source]);
 
   const availableKinds = useMemo(() => {
     const seen = new Set<string>();
@@ -68,12 +89,19 @@ export function Sidebar({
     return Array.from(seen).sort();
   }, [rows]);
 
+  const availableAgents = useMemo(() => {
+    const seen = new Set<string>();
+    for (const r of rows) if (r.agentName) seen.add(r.agentName);
+    return Array.from(seen).sort();
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const matches = rows.filter((r) => {
-      if (kindFilter && !(r.kindCounts[kindFilter as keyof typeof r.kindCounts] ?? 0)) {
+      if (kindFilter && !(r.kindCounts[kindFilter] ?? 0)) {
         return false;
       }
+      if (agentFilter && r.agentName !== agentFilter) return false;
       if (!q) return true;
       return (
         r.id.toLowerCase().includes(q) ||
@@ -82,7 +110,7 @@ export function Sidebar({
       );
     });
     return matches.slice().sort((a, b) => (chronoKey(a) < chronoKey(b) ? -1 : chronoKey(a) > chronoKey(b) ? 1 : 0));
-  }, [rows, query, kindFilter]);
+  }, [rows, query, kindFilter, agentFilter]);
 
   const visible = filtered.slice(0, RENDER_CAP);
 
@@ -103,30 +131,164 @@ export function Sidebar({
     return out;
   }, [visible]);
 
+  const filteredAgents = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return agents
+      .filter((a) => {
+        if (participationFilter === "participating" && !a.isParticipating) return false;
+        if (participationFilter === "not" && a.isParticipating) return false;
+        if (!q) return true;
+        return (
+          (a.name ?? "").toLowerCase().includes(q) ||
+          (a.goal ?? "").toLowerCase().includes(q) ||
+          (a.statusMessage ?? "").toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  }, [agents, query, participationFilter]);
+
+  const filteredRooms = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rooms
+      .filter((r) => !q || (r.name ?? "").toLowerCase().includes(q))
+      .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  }, [rooms, query]);
+
+  const sourceToggle = (
+    <div className="source-toggle">
+      <button className={source === "claudeCode" ? "active" : ""} onClick={() => onSourceChange("claudeCode")}>
+        Claude Code ({claudeCodeCount.toLocaleString()})
+      </button>
+      <button className={source === "trees" ? "active" : ""} onClick={() => onSourceChange("trees")}>
+        Attack chains ({treesCount.toLocaleString()})
+      </button>
+      <button className={source === "orphans" ? "active" : ""} onClick={() => onSourceChange("orphans")}>
+        Unanswered ({orphansCount.toLocaleString()})
+      </button>
+      <button className={source === "events" ? "active" : ""} onClick={() => onSourceChange("events")}>
+        Events ({eventsCount.toLocaleString()})
+      </button>
+      <button className={source === "agents" ? "active" : ""} onClick={() => onSourceChange("agents")}>
+        Agents ({agents.length.toLocaleString()})
+      </button>
+      <button className={source === "rooms" ? "active" : ""} onClick={() => onSourceChange("rooms")}>
+        Rooms ({rooms.length.toLocaleString()})
+      </button>
+    </div>
+  );
+
+  if (source === "agents") {
+    return (
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <h1>AI Village Transcripts</h1>
+          {sourceToggle}
+        </div>
+
+        <div className="sidebar-search">
+          <input
+            type="text"
+            placeholder="Search name, goal, status…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <div className="kind-chips">
+            {(["all", "participating", "not"] as const).map((p) => (
+              <button
+                key={p}
+                className={`chip ${participationFilter === p ? "active" : ""}`}
+                onClick={() => setParticipationFilter(p)}
+              >
+                {p === "all" ? "all" : p === "participating" ? "participating" : "not participating"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="sidebar-status">{filteredAgents.length.toLocaleString()} matching</div>
+
+        <ul className="transcript-list">
+          {filteredAgents.map((a) => (
+            <li
+              key={a.id}
+              className={`timeline-item ${a.id === selectedAgentId ? "selected" : ""}`}
+              onClick={() => onSelectAgent(a)}
+            >
+              <div className="rail">
+                <span className="rail-line" style={{ background: laneColor(a.id) }} />
+                <span className="rail-dot" style={{ background: laneColor(a.id), borderColor: laneColor(a.id) }} />
+              </div>
+              <div className="row-body">
+                <div className="row-top">
+                  <span className="row-id">
+                    {a.emoji} {a.name ?? a.id}
+                  </span>
+                  <span className="row-badges">
+                    <span className={`badge ${a.isParticipating ? "badge-result" : "badge-system"}`}>
+                      {a.isParticipating ? "participating" : "not participating"}
+                    </span>
+                  </span>
+                </div>
+                <div className="row-preview">{a.goal || a.statusMessage || <em>(no goal set)</em>}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </aside>
+    );
+  }
+
+  if (source === "rooms") {
+    return (
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <h1>AI Village Transcripts</h1>
+          {sourceToggle}
+        </div>
+
+        <div className="sidebar-search">
+          <input
+            type="text"
+            placeholder="Search room name…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+
+        <div className="sidebar-status">{filteredRooms.length.toLocaleString()} matching</div>
+
+        <ul className="transcript-list">
+          {filteredRooms.map((r) => (
+            <li
+              key={r.id}
+              className={`timeline-item ${r.id === selectedRoomId ? "selected" : ""}`}
+              onClick={() => onSelectRoom(r)}
+            >
+              <div className="rail">
+                <span className="rail-line" style={{ background: laneColor(r.id) }} />
+                <span className="rail-dot" style={{ background: laneColor(r.id), borderColor: laneColor(r.id) }} />
+              </div>
+              <div className="row-body">
+                <div className="row-top">
+                  <span className="row-id">#{r.name ?? r.id}</span>
+                  <span className="row-badges">
+                    <span className="badge badge-system">{(r.whitelistedAgentNames ?? []).length} agents</span>
+                  </span>
+                </div>
+                <div className="row-preview">{(r.whitelistedAgentNames ?? []).join(", ") || <em>open to all</em>}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </aside>
+    );
+  }
+
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
         <h1>AI Village Transcripts</h1>
-        <div className="source-toggle">
-          <button
-            className={source === "claudeCode" ? "active" : ""}
-            onClick={() => onSourceChange("claudeCode")}
-          >
-            Claude Code ({claudeCodeCount.toLocaleString()})
-          </button>
-          <button
-            className={source === "trees" ? "active" : ""}
-            onClick={() => onSourceChange("trees")}
-          >
-            Attack chains ({treesCount.toLocaleString()})
-          </button>
-          <button
-            className={source === "orphans" ? "active" : ""}
-            onClick={() => onSourceChange("orphans")}
-          >
-            Unanswered ({orphansCount.toLocaleString()})
-          </button>
-        </div>
+        {sourceToggle}
       </div>
 
       <div className="sidebar-search">
@@ -148,6 +310,20 @@ export function Sidebar({
               </button>
             ))}
           </div>
+        )}
+        {availableAgents.length > 0 && (
+          <select
+            className="agent-filter"
+            value={agentFilter ?? ""}
+            onChange={(e) => setAgentFilter(e.target.value || null)}
+          >
+            <option value="">All agents</option>
+            {availableAgents.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
         )}
       </div>
 

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
+import { AgentDetail } from "./components/AgentDetail";
 import { MetadataPanel } from "./components/MetadataPanel";
+import { RoomDetail } from "./components/RoomDetail";
 import { Sidebar } from "./components/Sidebar";
 import { Timeline } from "./components/Timeline";
 import { TranscriptThread } from "./components/TranscriptThread";
-import { fetchManifest } from "./lib/api";
-import type { Manifest, SourceKind, TranscriptSummary } from "./lib/types";
+import { fetchAgents, fetchChatRooms, fetchManifest } from "./lib/api";
+import type { AgentRecord, ChatRoomRecord, Manifest, SourceKind, TranscriptSummary } from "./lib/types";
 import { useTranscriptIndex } from "./lib/useTranscriptIndex";
 
 function App() {
@@ -14,14 +16,25 @@ function App() {
   const [source, setSource] = useState<SourceKind>("claudeCode");
   const [selected, setSelected] = useState<TranscriptSummary | null>(null);
   const [showTimeline, setShowTimeline] = useState(true);
+  const [agents, setAgents] = useState<AgentRecord[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<AgentRecord | null>(null);
+  const [rooms, setRooms] = useState<ChatRoomRecord[]>([]);
+  const [selectedRoom, setSelectedRoom] = useState<ChatRoomRecord | null>(null);
 
   useEffect(() => {
     fetchManifest()
       .then(setManifest)
       .catch((e) => setManifestError(String(e)));
+    fetchAgents()
+      .then(setAgents)
+      .catch(() => setAgents([]));
+    fetchChatRooms()
+      .then(setRooms)
+      .catch(() => setRooms([]));
   }, []);
 
-  const chunkedSource = source === "trees" || source === "orphans" ? manifest?.[source] : undefined;
+  const chunkedSource =
+    source === "trees" || source === "orphans" || source === "events" ? manifest?.[source] : undefined;
   const chunkedIndex = useTranscriptIndex(chunkedSource);
 
   const claudeCodeRows = useMemo(() => manifest?.claudeCode.transcripts ?? [], [manifest]);
@@ -52,6 +65,8 @@ function App() {
         onSourceChange={(s) => {
           setSource(s);
           setSelected(null);
+          setSelectedAgent(null);
+          setSelectedRoom(null);
         }}
         rows={index.rows}
         loadedChunks={index.loadedChunks}
@@ -60,21 +75,53 @@ function App() {
         treesCount={manifest?.trees.count ?? 0}
         orphansCount={manifest?.orphans.count ?? 0}
         claudeCodeCount={manifest?.claudeCode.count ?? 0}
+        eventsCount={manifest?.events?.count ?? 0}
         selectedId={selected?.id ?? null}
         onSelect={setSelected}
+        agents={agents}
+        selectedAgentId={selectedAgent?.id ?? null}
+        onSelectAgent={setSelectedAgent}
+        rooms={rooms}
+        selectedRoomId={selectedRoom?.id ?? null}
+        onSelectRoom={setSelectedRoom}
       />
       <main className="main-pane">
-        {source === "claudeCode" && (
-          <div className="timeline-panel">
-            <button className="timeline-toggle" onClick={() => setShowTimeline((v) => !v)}>
-              {showTimeline ? "▾" : "▸"} Timeline ({index.rows.length} sessions, by sdk_session_id lane)
-            </button>
-            {showTimeline && <Timeline rows={index.rows} selectedId={selected?.id ?? null} onSelect={setSelected} />}
-          </div>
+        {source === "agents" ? (
+          <AgentDetail agent={selectedAgent} />
+        ) : source === "rooms" ? (
+          <RoomDetail room={selectedRoom} />
+        ) : (
+          <>
+            {source === "claudeCode" && (
+              <div className="timeline-panel">
+                <button className="timeline-toggle" onClick={() => setShowTimeline((v) => !v)}>
+                  {showTimeline ? "▾" : "▸"} Timeline ({index.rows.length} sessions, by sdk_session_id lane)
+                </button>
+                {showTimeline && (
+                  <Timeline rows={index.rows} selectedId={selected?.id ?? null} onSelect={setSelected} />
+                )}
+              </div>
+            )}
+            <TranscriptThread summary={selected} />
+          </>
         )}
-        <TranscriptThread summary={selected} />
       </main>
-      <MetadataPanel summary={selected} />
+      {source === "agents" ? (
+        <aside className="metadata-panel">
+          <h2>Metadata</h2>
+          <p className="muted small">
+            Source: ai_village.db agents table — every registered agent in the village, including
+            ones with no Claude Code transcripts (not currently participating, pending, etc).
+          </p>
+        </aside>
+      ) : source === "rooms" ? (
+        <aside className="metadata-panel">
+          <h2>Metadata</h2>
+          <p className="muted small">Source: ai_village.db chat_rooms table.</p>
+        </aside>
+      ) : (
+        <MetadataPanel summary={selected} />
+      )}
     </div>
   );
 }

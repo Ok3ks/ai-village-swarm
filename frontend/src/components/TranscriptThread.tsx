@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchTree } from "../lib/api";
-import { summarizeTurns, type SummarizeResult } from "../lib/mockLlm";
+import { summarizeTurns, type SummarizeResult } from "../lib/llm";
 import type { Tree, TranscriptSummary, Turn } from "../lib/types";
 import { TurnCard } from "./TurnCard";
 
@@ -13,6 +13,7 @@ export function TranscriptThread({ summary }: { summary: TranscriptSummary | nul
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [summarizing, setSummarizing] = useState(false);
   const [result, setResult] = useState<SummarizeResult | null>(null);
+  const [llmError, setLlmError] = useState<{ name: string; message: string } | null>(null);
 
   useEffect(() => {
     setTree(null);
@@ -20,6 +21,7 @@ export function TranscriptThread({ summary }: { summary: TranscriptSummary | nul
     setVisibleCount(PAGE_SIZE);
     setSelectedIds(new Set());
     setResult(null);
+    setLlmError(null);
     if (!summary) return;
     let cancelled = false;
     fetchTree(summary)
@@ -51,9 +53,15 @@ export function TranscriptThread({ summary }: { summary: TranscriptSummary | nul
     const selected = allTurns.filter((t) => selectedIds.has(t.id));
     setSummarizing(true);
     setResult(null);
+    setLlmError(null);
     try {
       const r = await summarizeTurns(selected);
       setResult(r);
+    } catch (e) {
+      setLlmError({
+        name: e instanceof Error ? e.name : "Error",
+        message: e instanceof Error ? e.message : String(e),
+      });
     } finally {
       setSummarizing(false);
     }
@@ -104,10 +112,23 @@ export function TranscriptThread({ summary }: { summary: TranscriptSummary | nul
         )}
       </div>
 
+      {llmError && (
+        <div className="summary-card error">
+          <div className="turn-header">
+            <span className="turn-role">LLM ERROR</span>
+            <span className="turn-id">{llmError.name}</span>
+            <button className="copy-btn" onClick={() => setLlmError(null)}>
+              dismiss
+            </button>
+          </div>
+          <pre className="turn-text">{llmError.message}</pre>
+        </div>
+      )}
+
       {result && (
         <div className="summary-card">
           <div className="turn-header">
-            <span className="turn-role">MOCK LLM SUMMARY</span>
+            <span className="turn-role">LLM SUMMARY</span>
             <span className="turn-id">{result.model}</span>
             <span className="turn-cite">{Math.round(result.tookMs)}ms</span>
             <button className="copy-btn" onClick={() => setResult(null)}>

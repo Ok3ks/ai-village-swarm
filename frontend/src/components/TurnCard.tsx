@@ -11,6 +11,7 @@ const ROLE_LABEL: Record<Turn["kind"], string> = {
   assistant: "ASSISTANT",
   system: "SYSTEM",
   result: "RESULT",
+  event: "EVENT",
 };
 
 function copy(text: string) {

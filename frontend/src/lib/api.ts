@@ -1,4 +1,4 @@
-import type { Manifest, Tree, TranscriptSummary } from "./types";
+import type { AgentRecord, ChatRoomRecord, Manifest, Tree, TranscriptSummary } from "./types";
 
 const dataChunkCache = new Map<string, Promise<Tree[]>>();
 const indexChunkCache = new Map<string, Promise<TranscriptSummary[]>>();
@@ -11,6 +11,20 @@ async function fetchJson<T>(path: string): Promise<T> {
 
 export function fetchManifest(): Promise<Manifest> {
   return fetchJson<Manifest>("manifest.json");
+}
+
+let agentsCache: Promise<AgentRecord[]> | null = null;
+
+export function fetchAgents(): Promise<AgentRecord[]> {
+  if (!agentsCache) agentsCache = fetchJson<AgentRecord[]>("agents.json");
+  return agentsCache;
+}
+
+let chatRoomsCache: Promise<ChatRoomRecord[]> | null = null;
+
+export function fetchChatRooms(): Promise<ChatRoomRecord[]> {
+  if (!chatRoomsCache) chatRoomsCache = fetchJson<ChatRoomRecord[]>("chat_rooms.json");
+  return chatRoomsCache;
 }
 
 export function fetchIndexChunk(path: string): Promise<TranscriptSummary[]> {
