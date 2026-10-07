@@ -1,7 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
-import type { AgentRecord, ChatRoomRecord, SourceKind, TranscriptSummary } from "../lib/types";
+import type { ChatRoomRecord, SourceKind, TranscriptSummary } from "../lib/types";
+import { SidebarRow } from "./SidebarRow";
 
 const RENDER_CAP = 250;
+
+type Group = "transcripts" | "village";
+
+// Claude Code transcripts come from agents running inside this village, and
+// Events/Rooms/Network are the village's own activity log -- all distinct
+// from the swarmtraces attack corpus, which is an unrelated external
+// dataset (the only thing left in the "Transcripts" group).
+const VILLAGE_SOURCES: SourceKind[] = ["claudeCode", "rooms", "network", "events"];
+
+function groupOf(source: SourceKind): Group {
+  return VILLAGE_SOURCES.includes(source) ? "village" : "transcripts";
+}
+
+function defaultSourceFor(group: Group): SourceKind {
+  return group === "transcripts" ? "trees" : "claudeCode";
+}
 
 interface Props {
   source: SourceKind;
@@ -10,20 +27,21 @@ interface Props {
   loadedChunks: number;
   totalChunks: number;
   loading: boolean;
+  hasMore: boolean;
+  onLoadMore: () => void;
   treesCount: number;
   orphansCount: number;
   claudeCodeCount: number;
   eventsCount: number;
   selectedId: string | null;
   onSelect: (s: TranscriptSummary) => void;
-  agents: AgentRecord[];
-  selectedAgentId: string | null;
-  onSelectAgent: (a: AgentRecord) => void;
   rooms: ChatRoomRecord[];
   selectedRoomId: string | null;
   onSelectRoom: (r: ChatRoomRecord) => void;
   selectedEventIds: Set<string>;
   onToggleEvent: (id: string) => void;
+  chatOpen: boolean;
+  onToggleChat: () => void;
 }
 
 // Numeric-id corpora (swarmtraces) don't carry real timestamps, but ids were
@@ -51,6 +69,8 @@ function laneColor(key: string): string {
   return `hsl(${h % 360} 65% 60%)`;
 }
 
+const NEUTRAL_LANE = "var(--border)";
+
 type Row =
   | { type: "divider"; key: string; label: string }
   | { type: "item"; key: string; row: TranscriptSummary };
@@ -62,29 +82,32 @@ export function Sidebar({
   loadedChunks,
   totalChunks,
   loading,
+  hasMore,
+  onLoadMore,
   treesCount,
   orphansCount,
   claudeCodeCount,
   eventsCount,
   selectedId,
   onSelect,
-  agents,
-  selectedAgentId,
-  onSelectAgent,
   rooms,
   selectedRoomId,
   onSelectRoom,
   selectedEventIds,
   onToggleEvent,
+  chatOpen,
+  onToggleChat,
 }: Props) {
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<string | null>(null);
   const [agentFilter, setAgentFilter] = useState<string | null>(null);
-  const [participationFilter, setParticipationFilter] = useState<"all" | "participating" | "not">("all");
+
+  const group = groupOf(source);
 
   useEffect(() => {
     setAgentFilter(null);
     setKindFilter(null);
+    setQuery("");
   }, [source]);
 
   const availableKinds = useMemo(() => {
@@ -135,22 +158,6 @@ export function Sidebar({
     return out;
   }, [visible]);
 
-  const filteredAgents = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return agents
-      .filter((a) => {
-        if (participationFilter === "participating" && !a.isParticipating) return false;
-        if (participationFilter === "not" && a.isParticipating) return false;
-        if (!q) return true;
-        return (
-          (a.name ?? "").toLowerCase().includes(q) ||
-          (a.goal ?? "").toLowerCase().includes(q) ||
-          (a.statusMessage ?? "").toLowerCase().includes(q)
-        );
-      })
-      .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
-  }, [agents, query, participationFilter]);
-
   const filteredRooms = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rooms
@@ -158,86 +165,67 @@ export function Sidebar({
       .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
   }, [rooms, query]);
 
-  const sourceToggle = (
-    <div className="source-toggle">
-      <button className={source === "claudeCode" ? "active" : ""} onClick={() => onSourceChange("claudeCode")}>
-        Claude Code ({claudeCodeCount.toLocaleString()})
-      </button>
-      <button className={source === "trees" ? "active" : ""} onClick={() => onSourceChange("trees")}>
-        Attack chains ({treesCount.toLocaleString()})
-      </button>
-      <button className={source === "orphans" ? "active" : ""} onClick={() => onSourceChange("orphans")}>
-        Unanswered ({orphansCount.toLocaleString()})
-      </button>
-      <button className={source === "events" ? "active" : ""} onClick={() => onSourceChange("events")}>
-        Events ({eventsCount.toLocaleString()})
-      </button>
-      <button className={source === "agents" ? "active" : ""} onClick={() => onSourceChange("agents")}>
-        Agents ({agents.length.toLocaleString()})
-      </button>
-      <button className={source === "rooms" ? "active" : ""} onClick={() => onSourceChange("rooms")}>
-        Rooms ({rooms.length.toLocaleString()})
-      </button>
+  const header = (
+    <div className="sidebar-header">
+      <h1>AI Village Transcripts</h1>
+      <div className="group-toggle">
+        <button
+          className={group === "transcripts" ? "active" : ""}
+          onClick={() => onSourceChange(defaultSourceFor("transcripts"))}
+        >
+          Transcripts
+        </button>
+        <button
+          className={group === "village" ? "active" : ""}
+          onClick={() => onSourceChange(defaultSourceFor("village"))}
+        >
+          Village
+        </button>
+        <button className={chatOpen ? "active" : ""} onClick={onToggleChat}>
+          💬 Chat
+        </button>
+      </div>
+      <div className="source-toggle">
+        {group === "transcripts" ? (
+          <>
+            <button className={source === "trees" ? "active" : ""} onClick={() => onSourceChange("trees")}>
+              Attack chains ({treesCount.toLocaleString()})
+            </button>
+            <button className={source === "orphans" ? "active" : ""} onClick={() => onSourceChange("orphans")}>
+              Unanswered ({orphansCount.toLocaleString()})
+            </button>
+          </>
+        ) : (
+          <>
+            <button className={source === "claudeCode" ? "active" : ""} onClick={() => onSourceChange("claudeCode")}>
+              Claude Code ({claudeCodeCount.toLocaleString()})
+            </button>
+            <button className={source === "network" ? "active" : ""} onClick={() => onSourceChange("network")}>
+              Network
+            </button>
+            <button className={source === "rooms" ? "active" : ""} onClick={() => onSourceChange("rooms")}>
+              Rooms ({rooms.length.toLocaleString()})
+            </button>
+            <button className={source === "events" ? "active" : ""} onClick={() => onSourceChange("events")}>
+              Events ({eventsCount.toLocaleString()})
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 
-  if (source === "agents") {
+  if (source === "network") {
     return (
       <aside className="sidebar">
-        <div className="sidebar-header">
-          <h1>AI Village Transcripts</h1>
-          {sourceToggle}
-        </div>
-
+        {header}
         <div className="sidebar-search">
-          <input
-            type="text"
-            placeholder="Search name, goal, status…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <div className="kind-chips">
-            {(["all", "participating", "not"] as const).map((p) => (
-              <button
-                key={p}
-                className={`chip ${participationFilter === p ? "active" : ""}`}
-                onClick={() => setParticipationFilter(p)}
-              >
-                {p === "all" ? "all" : p === "participating" ? "participating" : "not participating"}
-              </button>
-            ))}
-          </div>
+          <p className="muted small">
+            Undirected graph of every agent-to-agent @-mention found in chat_messages. Click a node in
+            the main view to chat with an LLM about that agent, drag the slider to cut clutter from
+            low-count edges.
+          </p>
         </div>
-
-        <div className="sidebar-status">{filteredAgents.length.toLocaleString()} matching</div>
-
-        <ul className="transcript-list">
-          {filteredAgents.map((a) => (
-            <li
-              key={a.id}
-              className={`timeline-item ${a.id === selectedAgentId ? "selected" : ""}`}
-              onClick={() => onSelectAgent(a)}
-            >
-              <div className="rail">
-                <span className="rail-line" style={{ background: laneColor(a.id) }} />
-                <span className="rail-dot" style={{ background: laneColor(a.id), borderColor: laneColor(a.id) }} />
-              </div>
-              <div className="row-body">
-                <div className="row-top">
-                  <span className="row-id">
-                    {a.emoji} {a.name ?? a.id}
-                  </span>
-                  <span className="row-badges">
-                    <span className={`badge ${a.isParticipating ? "badge-result" : "badge-system"}`}>
-                      {a.isParticipating ? "participating" : "not participating"}
-                    </span>
-                  </span>
-                </div>
-                <div className="row-preview">{a.goal || a.statusMessage || <em>(no goal set)</em>}</div>
-              </div>
-            </li>
-          ))}
-        </ul>
       </aside>
     );
   }
@@ -245,10 +233,7 @@ export function Sidebar({
   if (source === "rooms") {
     return (
       <aside className="sidebar">
-        <div className="sidebar-header">
-          <h1>AI Village Transcripts</h1>
-          {sourceToggle}
-        </div>
+        {header}
 
         <div className="sidebar-search">
           <input
@@ -263,25 +248,21 @@ export function Sidebar({
 
         <ul className="transcript-list">
           {filteredRooms.map((r) => (
-            <li
+            <SidebarRow
               key={r.id}
-              className={`timeline-item ${r.id === selectedRoomId ? "selected" : ""}`}
+              selected={r.id === selectedRoomId}
+              laneColor={laneColor(r.id)}
               onClick={() => onSelectRoom(r)}
-            >
-              <div className="rail">
-                <span className="rail-line" style={{ background: laneColor(r.id) }} />
-                <span className="rail-dot" style={{ background: laneColor(r.id), borderColor: laneColor(r.id) }} />
-              </div>
-              <div className="row-body">
-                <div className="row-top">
-                  <span className="row-id">#{r.name ?? r.id}</span>
-                  <span className="row-badges">
-                    <span className="badge badge-system">{(r.whitelistedAgentNames ?? []).length} agents</span>
-                  </span>
-                </div>
-                <div className="row-preview">{(r.whitelistedAgentNames ?? []).join(", ") || <em>open to all</em>}</div>
-              </div>
-            </li>
+              title={`#${r.name ?? r.id}`}
+              badges={[
+                {
+                  key: "agents",
+                  label: `${(r.whitelistedAgentNames ?? []).length} agents`,
+                  className: "badge-system",
+                },
+              ]}
+              preview={(r.whitelistedAgentNames ?? []).join(", ") || <em>open to all</em>}
+            />
           ))}
         </ul>
       </aside>
@@ -290,10 +271,7 @@ export function Sidebar({
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-header">
-        <h1>AI Village Transcripts</h1>
-        {sourceToggle}
-      </div>
+      {header}
 
       <div className="sidebar-search">
         <input
@@ -355,44 +333,37 @@ export function Sidebar({
           // Only agent-attributed sources (claude code) have a real "lane" to
           // color, like a branch in a git graph; other sources get a neutral
           // rail so the color doesn't imply a grouping that isn't there.
-          const lane = r.agentId ? laneColor(r.agentId) : "var(--border)";
           return (
-            <li
+            <SidebarRow
               key={entry.key}
-              className={`timeline-item ${r.id === selectedId ? "selected" : ""}`}
+              selected={r.id === selectedId}
+              laneColor={r.agentId ? laneColor(r.agentId) : NEUTRAL_LANE}
               onClick={() => onSelect(r)}
-            >
-              {source === "events" && (
-                <input
-                  type="checkbox"
-                  className="turn-select"
-                  checked={selectedEventIds.has(r.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={() => onToggleEvent(r.id)}
-                  title="Select for batch summarize"
-                />
-              )}
-              <div className="rail">
-                <span className="rail-line" style={{ background: lane }} />
-                <span className="rail-dot" style={{ background: lane, borderColor: lane }} />
-              </div>
-              <div className="row-body">
-                <div className="row-top">
-                  <span className="row-id">{r.id}</span>
-                  <span className="row-badges">
-                    {Object.entries(r.kindCounts).map(([k, v]) => (
-                      <span key={k} className={`badge badge-${k}`}>
-                        {v}
-                      </span>
-                    ))}
-                  </span>
-                </div>
-                <div className="row-preview">{r.preview || <em>(empty)</em>}</div>
-              </div>
-            </li>
+              title={r.id}
+              badges={Object.entries(r.kindCounts).map(([k, v]) => ({
+                key: k,
+                label: v,
+                className: `badge-${k}`,
+              }))}
+              preview={r.preview || <em>(empty)</em>}
+              checkbox={
+                source === "events"
+                  ? {
+                      checked: selectedEventIds.has(r.id),
+                      onChange: () => onToggleEvent(r.id),
+                      title: "Select for batch summarize",
+                    }
+                  : undefined
+              }
+            />
           );
         })}
       </ul>
+      {hasMore && (
+        <button className="expand-btn sidebar-load-more" onClick={onLoadMore} disabled={loading}>
+          {loading ? "Loading…" : `Load more (${loadedChunks}/${totalChunks} chunks fetched)`}
+        </button>
+      )}
     </aside>
   );
 }

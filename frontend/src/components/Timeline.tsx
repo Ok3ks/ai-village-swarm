@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { onActivateKey } from "../lib/a11y";
 import type { TranscriptSummary } from "../lib/types";
 
 const PX_PER_DAY = 22;
@@ -6,6 +7,7 @@ const ROW_H = 20;
 const LEFT_PAD = 8;
 const AXIS_H = 28;
 const MIN_WIDTH = 600;
+const MAX_POINTS = 4000;
 
 function parseTs(s: string): number {
   return new Date(s.replace(" ", "T")).getTime();
@@ -42,10 +44,19 @@ interface Props {
 }
 
 export function Timeline({ rows, selectedId, onSelect }: Props) {
-  const timed = useMemo(
+  const allTimed = useMemo(
     () => rows.filter((r) => r.startTime && r.endTime) as (TranscriptSummary & { startTime: string; endTime: string })[],
     [rows]
   );
+
+  // Sources like events can accumulate tens of thousands of rows -- render
+  // one SVG node per row and the browser chokes. Downsample evenly rather
+  // than silently truncating to the first/last N.
+  const timed = useMemo(() => {
+    if (allTimed.length <= MAX_POINTS) return allTimed;
+    const step = Math.ceil(allTimed.length / MAX_POINTS);
+    return allTimed.filter((_, i) => i % step === 0);
+  }, [allTimed]);
 
   const { lanes, minT, maxT } = useMemo(() => {
     if (timed.length === 0) return { lanes: [] as { key: string; items: typeof timed }[], minT: 0, maxT: 1 };
@@ -75,6 +86,12 @@ export function Timeline({ rows, selectedId, onSelect }: Props) {
 
   return (
     <div className="timeline-graph">
+      {timed.length < allTimed.length && (
+        <p className="muted small">
+          Sampled {timed.length.toLocaleString()} of {allTimed.length.toLocaleString()} timestamped items for
+          performance.
+        </p>
+      )}
       <svg width={width} height={height} role="img" aria-label="Transcript timeline">
         {ticks.map((tick) => (
           <g key={tick.label}>
@@ -110,6 +127,11 @@ export function Timeline({ rows, selectedId, onSelect }: Props) {
                   strokeWidth={r.id === selectedId ? 2 : 0}
                   className="timeline-node"
                   onClick={() => onSelect(r)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${r.id}, ${r.startTime}`}
+                  aria-pressed={r.id === selectedId}
+                  onKeyDown={onActivateKey(() => onSelect(r))}
                 >
                   <title>
                     {r.id} · {r.startTime}

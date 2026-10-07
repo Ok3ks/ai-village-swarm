@@ -1,4 +1,4 @@
-import type { AgentRecord, ChatRoomRecord, Manifest, Tree, TranscriptSummary } from "./types";
+import type { AgentRecord, ChatRoomRecord, CommEdge, Manifest, Tree, TranscriptSummary, Turn } from "./types";
 
 const dataChunkCache = new Map<string, Promise<Tree[]>>();
 const indexChunkCache = new Map<string, Promise<TranscriptSummary[]>>();
@@ -25,6 +25,24 @@ let chatRoomsCache: Promise<ChatRoomRecord[]> | null = null;
 export function fetchChatRooms(): Promise<ChatRoomRecord[]> {
   if (!chatRoomsCache) chatRoomsCache = fetchJson<ChatRoomRecord[]>("chat_rooms.json");
   return chatRoomsCache;
+}
+
+let agentCommsCache: Promise<CommEdge[]> | null = null;
+
+export function fetchAgentComms(): Promise<CommEdge[]> {
+  if (!agentCommsCache) agentCommsCache = fetchJson<CommEdge[]>("agent_comms.json");
+  return agentCommsCache;
+}
+
+const roomMessageChunkCache = new Map<string, Promise<Turn[]>>();
+
+export function fetchRoomMessageChunk(path: string): Promise<Turn[]> {
+  let p = roomMessageChunkCache.get(path);
+  if (!p) {
+    p = fetchJson<Turn[]>(path);
+    roomMessageChunkCache.set(path, p);
+  }
+  return p;
 }
 
 export function fetchIndexChunk(path: string): Promise<TranscriptSummary[]> {

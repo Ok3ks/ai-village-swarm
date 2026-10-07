@@ -6,7 +6,8 @@ export type TurnKind =
   | "assistant"
   | "system"
   | "result"
-  | "event";
+  | "event"
+  | "chat";
 
 export interface Turn {
   id: string;
@@ -70,6 +71,14 @@ export interface Manifest {
   agents?: FlatFileManifest;
   chatRooms?: FlatFileManifest;
   events?: SourceManifest;
+  agentComms?: FlatFileManifest;
+  roomMessages?: Record<string, { count: number; chunkFiles: string[] }>;
+}
+
+export interface CommEdge {
+  a: string;
+  b: string;
+  count: number;
 }
 
 export interface AgentRecord {
@@ -103,4 +112,4 @@ export interface ChatRoomRecord {
   blacklistedAgentNames: string[] | null;
 }
 
-export type SourceKind = "trees" | "orphans" | "claudeCode" | "agents" | "rooms" | "events";
+export type SourceKind = "trees" | "orphans" | "claudeCode" | "rooms" | "events" | "network";

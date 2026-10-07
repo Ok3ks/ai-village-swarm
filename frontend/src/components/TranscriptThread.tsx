@@ -1,27 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchTree } from "../lib/api";
-import { summarizeTurns, type SummarizeResult } from "../lib/llm";
 import type { Tree, TranscriptSummary, Turn } from "../lib/types";
 import { TurnCard } from "./TurnCard";
 
 const PAGE_SIZE = 150;
 
-export function TranscriptThread({ summary }: { summary: TranscriptSummary | null }) {
+interface Props {
+  summary: TranscriptSummary | null;
+  onSummarize: (turns: Turn[], label: string) => void;
+}
+
+export function TranscriptThread({ summary, onSummarize }: Props) {
   const [tree, setTree] = useState<Tree | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [summarizing, setSummarizing] = useState(false);
-  const [result, setResult] = useState<SummarizeResult | null>(null);
-  const [llmError, setLlmError] = useState<{ name: string; message: string } | null>(null);
 
   useEffect(() => {
     setTree(null);
     setError(null);
     setVisibleCount(PAGE_SIZE);
     setSelectedIds(new Set());
-    setResult(null);
-    setLlmError(null);
     if (!summary) return;
     let cancelled = false;
     fetchTree(summary)
@@ -49,22 +48,9 @@ export function TranscriptThread({ summary }: { summary: TranscriptSummary | nul
 
   const clearSelection = () => setSelectedIds(new Set());
 
-  const handleSummarize = async () => {
+  const handleSummarize = () => {
     const selected = allTurns.filter((t) => selectedIds.has(t.id));
-    setSummarizing(true);
-    setResult(null);
-    setLlmError(null);
-    try {
-      const r = await summarizeTurns(selected);
-      setResult(r);
-    } catch (e) {
-      setLlmError({
-        name: e instanceof Error ? e.name : "Error",
-        message: e instanceof Error ? e.message : String(e),
-      });
-    } finally {
-      setSummarizing(false);
-    }
+    onSummarize(selected, `Summarize ${selected.length} selected turn(s) from ${summary?.id ?? "transcript"}`);
   };
 
   if (!summary) {
@@ -100,10 +86,11 @@ export function TranscriptThread({ summary }: { summary: TranscriptSummary | nul
         <span className="muted small">{selectedIds.size} turn(s) selected</span>
         <button
           className="summarize-btn"
-          disabled={selectedIds.size === 0 || summarizing}
+          disabled={selectedIds.size <= 1}
+          title={selectedIds.size <= 1 ? "Select more than one turn to summarize" : undefined}
           onClick={handleSummarize}
         >
-          {summarizing ? "Summarizing…" : "Summarize selected"}
+          Summarize selected
         </button>
         {selectedIds.size > 0 && (
           <button className="expand-btn" onClick={clearSelection}>
@@ -111,33 +98,6 @@ export function TranscriptThread({ summary }: { summary: TranscriptSummary | nul
           </button>
         )}
       </div>
-
-      {llmError && (
-        <div className="summary-card error">
-          <div className="turn-header">
-            <span className="turn-role">LLM ERROR</span>
-            <span className="turn-id">{llmError.name}</span>
-            <button className="copy-btn" onClick={() => setLlmError(null)}>
-              dismiss
-            </button>
-          </div>
-          <pre className="turn-text">{llmError.message}</pre>
-        </div>
-      )}
-
-      {result && (
-        <div className="summary-card">
-          <div className="turn-header">
-            <span className="turn-role">LLM SUMMARY</span>
-            <span className="turn-id">{result.model}</span>
-            <span className="turn-cite">{Math.round(result.tookMs)}ms</span>
-            <button className="copy-btn" onClick={() => setResult(null)}>
-              dismiss
-            </button>
-          </div>
-          <pre className="turn-text">{result.text}</pre>
-        </div>
-      )}
 
       <TurnCard turn={tree.root} isRoot selected={selectedIds.has(tree.root.id)} onToggleSelect={toggleSelect} />
       {tree.turns.length === 0 && (

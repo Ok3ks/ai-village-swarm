@@ -12,6 +12,7 @@ const ROLE_LABEL: Record<Turn["kind"], string> = {
   system: "SYSTEM",
   result: "RESULT",
   event: "EVENT",
+  chat: "CHAT MESSAGE",
 };
 
 function copy(text: string) {
