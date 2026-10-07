@@ -2,12 +2,13 @@ import gzip, json, datetime as dt
 from collections import defaultdict
 from pathlib import Path
 from typing import Optional
-from sqlalchemy import (create_engine, select, func, event, Text, String, JSON, Float)
-from sqlalchemy.orm import (DeclarativeBase, Mapped, mapped_column, relationship, Session)
+from sqlalchemy import create_engine, select, func, event, Text, String, JSON, Float
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, Session
 
 DATA_DIR = Path("ai-village")
 BATCH = 5000
 engine = create_engine("sqlite:///ai_village.db")
+
 
 @event.listens_for(engine, "connect")
 def _pragmas(con, _):
@@ -16,11 +17,18 @@ def _pragmas(con, _):
     cur.execute("PRAGMA synchronous=OFF")
     cur.close()
 
+
 class Base(DeclarativeBase):
     pass
 
-def J(): return mapped_column(JSON, nullable=True)
-def TX(**kw): return mapped_column(Text, nullable=True, **kw)
+
+def J():
+    return mapped_column(JSON, nullable=True)
+
+
+def TX(**kw):
+    return mapped_column(Text, nullable=True, **kw)
+
 
 class Agent(Base):
     __tablename__ = "agents"
@@ -48,15 +56,23 @@ class Agent(Base):
     updated_at: Mapped[Optional[str]]
 
     goals: Mapped[list["AgentGoal"]] = relationship(
-        back_populates="agent", primaryjoin="Agent.id==foreign(AgentGoal.agent_id)")
+        back_populates="agent", primaryjoin="Agent.id==foreign(AgentGoal.agent_id)"
+    )
     sessions: Mapped[list["ComputerUseSession"]] = relationship(
-        back_populates="agent", primaryjoin="Agent.id==foreign(ComputerUseSession.agent_id)")
+        back_populates="agent",
+        primaryjoin="Agent.id==foreign(ComputerUseSession.agent_id)",
+    )
     memories: Mapped[list["AgentMemory"]] = relationship(
-        back_populates="agent", primaryjoin="Agent.id==foreign(AgentMemory.agent_id)")
+        back_populates="agent", primaryjoin="Agent.id==foreign(AgentMemory.agent_id)"
+    )
     messages: Mapped[list["ChatMessage"]] = relationship(
-        back_populates="agent", primaryjoin="Agent.id==foreign(ChatMessage.agent_speaker_id)")
+        back_populates="agent",
+        primaryjoin="Agent.id==foreign(ChatMessage.agent_speaker_id)",
+    )
     events: Mapped[list["Event"]] = relationship(
-        back_populates="agent", primaryjoin="Agent.id==foreign(Event.agent_id)")
+        back_populates="agent", primaryjoin="Agent.id==foreign(Event.agent_id)"
+    )
+
 
 class AgentGoal(Base):
     __tablename__ = "agent_goals"
@@ -70,7 +86,9 @@ class AgentGoal(Base):
     created_at: Mapped[Optional[str]]
     updated_at: Mapped[Optional[str]]
     agent: Mapped[Optional[Agent]] = relationship(
-        back_populates="goals", primaryjoin="foreign(AgentGoal.agent_id)==Agent.id")
+        back_populates="goals", primaryjoin="foreign(AgentGoal.agent_id)==Agent.id"
+    )
+
 
 class AgentMemory(Base):
     __tablename__ = "agent_memories"
@@ -80,7 +98,9 @@ class AgentMemory(Base):
     created_at: Mapped[Optional[str]] = mapped_column(index=True)
     updated_at: Mapped[Optional[str]]
     agent: Mapped[Optional[Agent]] = relationship(
-        back_populates="memories", primaryjoin="foreign(AgentMemory.agent_id)==Agent.id")
+        back_populates="memories", primaryjoin="foreign(AgentMemory.agent_id)==Agent.id"
+    )
+
 
 class ChatRoom(Base):
     __tablename__ = "chat_rooms"
@@ -95,6 +115,7 @@ class ChatRoom(Base):
     whitelisted_agent_names: Mapped[Optional[list]] = J()
     blacklisted_agent_names: Mapped[Optional[list]] = J()
 
+
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
     id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -107,10 +128,14 @@ class ChatMessage(Base):
     created_at: Mapped[Optional[str]] = mapped_column(index=True)
     updated_at: Mapped[Optional[str]]
     agent: Mapped[Optional[Agent]] = relationship(
-        back_populates="messages", primaryjoin="foreign(ChatMessage.agent_speaker_id)==Agent.id")
+        back_populates="messages",
+        primaryjoin="foreign(ChatMessage.agent_speaker_id)==Agent.id",
+    )
+
 
 class Event(Base):
     """Raw columns + enriched columns flattened from data."""
+
     __tablename__ = "events"
     id: Mapped[str] = mapped_column(String, primary_key=True)
     event_index: Mapped[Optional[int]] = mapped_column(index=True)
@@ -120,7 +145,9 @@ class Event(Base):
     updated_at: Mapped[Optional[str]]
     # enriched
     action_type: Mapped[Optional[str]] = mapped_column(index=True)
-    agent_id: Mapped[Optional[str]] = mapped_column(index=True)   # agentId, else speakerId
+    agent_id: Mapped[Optional[str]] = mapped_column(
+        index=True
+    )  # agentId, else speakerId
     speaker_id: Mapped[Optional[str]]
     speaker_name: Mapped[Optional[str]]
     message_id: Mapped[Optional[str]] = mapped_column(index=True)
@@ -135,7 +162,9 @@ class Event(Base):
     input_tokens: Mapped[Optional[int]]
     output_tokens: Mapped[Optional[int]]
     agent: Mapped[Optional[Agent]] = relationship(
-        back_populates="events", primaryjoin="foreign(Event.agent_id)==Agent.id")
+        back_populates="events", primaryjoin="foreign(Event.agent_id)==Agent.id"
+    )
+
 
 class ComputerUseSession(Base):
     __tablename__ = "computer_use_sessions"
@@ -148,13 +177,18 @@ class ComputerUseSession(Base):
     session_goal: Mapped[Optional[str]] = TX()
     short_displayed_session_goal: Mapped[Optional[str]] = TX()
     agent: Mapped[Optional[Agent]] = relationship(
-        back_populates="sessions", primaryjoin="foreign(ComputerUseSession.agent_id)==Agent.id")
+        back_populates="sessions",
+        primaryjoin="foreign(ComputerUseSession.agent_id)==Agent.id",
+    )
     turns: Mapped[list["ComputerUseTurn"]] = relationship(
         back_populates="session",
-        primaryjoin="ComputerUseSession.id==foreign(ComputerUseTurn.session_id)")
+        primaryjoin="ComputerUseSession.id==foreign(ComputerUseTurn.session_id)",
+    )
+
 
 class ComputerUseTurn(Base):
     """Columns per SCHEMA.md; not yet verified against HF features."""
+
     __tablename__ = "computer_use_turns"
     id: Mapped[str] = mapped_column(String, primary_key=True)
     session_id: Mapped[Optional[str]] = mapped_column(index=True)
@@ -171,7 +205,9 @@ class ComputerUseTurn(Base):
     action_name: Mapped[Optional[str]] = mapped_column(index=True)
     session: Mapped[Optional[ComputerUseSession]] = relationship(
         back_populates="turns",
-        primaryjoin="foreign(ComputerUseTurn.session_id)==ComputerUseSession.id")
+        primaryjoin="foreign(ComputerUseTurn.session_id)==ComputerUseSession.id",
+    )
+
 
 class Summary(Base):
     __tablename__ = "summaries"
@@ -185,6 +221,7 @@ class Summary(Base):
     created_at: Mapped[Optional[str]]
     updated_at: Mapped[Optional[str]]
 
+
 class VillageGoal(Base):
     __tablename__ = "village_goals"
     id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -194,6 +231,7 @@ class VillageGoal(Base):
     end_time: Mapped[Optional[str]]
     created_at: Mapped[Optional[str]]
     updated_at: Mapped[Optional[str]]
+
 
 class Village(Base):
     __tablename__ = "villages"
@@ -208,6 +246,7 @@ class Village(Base):
     created_at: Mapped[Optional[str]]
     updated_at: Mapped[Optional[str]]
 
+
 class ClaudeCodeMessage(Base):
     __tablename__ = "claude_code_messages"
     id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -219,8 +258,10 @@ class ClaudeCodeMessage(Base):
     content: Mapped[Optional[dict]] = J()
     created_at: Mapped[Optional[str]]
 
+
 class ClaudeCodeSession(Base):
     """Columns per SCHEMA.md; not yet verified against HF features."""
+
     __tablename__ = "claude_code_sessions"
     id: Mapped[str] = mapped_column(String, primary_key=True)
     agent_id: Mapped[Optional[str]]
@@ -236,8 +277,10 @@ def enrich_event(r, row):
         d = json.loads(d)
     row["data"] = d
     cost = d.get("cost")
-    try: cost = float(cost) if cost is not None else None
-    except (TypeError, ValueError): cost = None
+    try:
+        cost = float(cost) if cost is not None else None
+    except (TypeError, ValueError):
+        cost = None
     row.update(
         action_type=d.get("actionType"),
         agent_id=d.get("agentId") or d.get("speakerId"),
@@ -257,7 +300,6 @@ def enrich_event(r, row):
     )
 
 
-
 # ---------- loading ----------
 def read_jsonl(path):
     with gzip.open(path, "rt", encoding="utf-8") as f:
@@ -269,10 +311,17 @@ def read_jsonl(path):
 if __name__ == "__main__":
     Base.metadata.create_all(engine)
     order = [
-        (Village, "villages"), (Agent, "agents"), (AgentGoal, "agent_goals"),
-        (VillageGoal, "village_goals"), (ChatRoom, "chat_rooms"),
-        (ChatMessage, "chat_messages"), (Summary, "summaries"),
-        (AgentMemory, "agent_memories"), (ComputerUseSession, "computer_use_sessions"),
-        (ClaudeCodeSession, "claude_code_sessions"), (ClaudeCodeMessage, "claude_code_messages"),
-        (Event, "events"), (ComputerUseTurn, "computer_use_turns"),
+        (Village, "villages"),
+        (Agent, "agents"),
+        (AgentGoal, "agent_goals"),
+        (VillageGoal, "village_goals"),
+        (ChatRoom, "chat_rooms"),
+        (ChatMessage, "chat_messages"),
+        (Summary, "summaries"),
+        (AgentMemory, "agent_memories"),
+        (ComputerUseSession, "computer_use_sessions"),
+        (ClaudeCodeSession, "claude_code_sessions"),
+        (ClaudeCodeMessage, "claude_code_messages"),
+        (Event, "events"),
+        (ComputerUseTurn, "computer_use_turns"),
     ]
