@@ -308,20 +308,22 @@ def read_jsonl(path):
                 yield json.loads(line)
 
 
+# (model, HF subset name) in dependency order (parents before children)
+order = [
+    (Village, "villages"),
+    (Agent, "agents"),
+    (AgentGoal, "agent_goals"),
+    (VillageGoal, "village_goals"),
+    (ChatRoom, "chat_rooms"),
+    (ChatMessage, "chat_messages"),
+    (Summary, "summaries"),
+    (AgentMemory, "agent_memories"),
+    (ComputerUseSession, "computer_use_sessions"),
+    (ClaudeCodeSession, "claude_code_sessions"),
+    (ClaudeCodeMessage, "claude_code_messages"),
+    (Event, "events"),
+    (ComputerUseTurn, "computer_use_turns"),
+]
+
 if __name__ == "__main__":
     Base.metadata.create_all(engine)
-    order = [
-        (Village, "villages"),
-        (Agent, "agents"),
-        (AgentGoal, "agent_goals"),
-        (VillageGoal, "village_goals"),
-        (ChatRoom, "chat_rooms"),
-        (ChatMessage, "chat_messages"),
-        (Summary, "summaries"),
-        (AgentMemory, "agent_memories"),
-        (ComputerUseSession, "computer_use_sessions"),
-        (ClaudeCodeSession, "claude_code_sessions"),
-        (ClaudeCodeMessage, "claude_code_messages"),
-        (Event, "events"),
-        (ComputerUseTurn, "computer_use_turns"),
-    ]

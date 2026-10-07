@@ -1,88 +1,50 @@
-import json
-from sqlalchemy import insert
-from sqlalchemy.orm import Session
+"""
+Populates ai_village.db (sqlite, schema defined in db.py) from the
+aidigestorg/ai-village HuggingFace dataset.
 
-from dataset import get_dataset
-from db import (
-    Base,
-    engine,
-    BATCH,
-    enrich_event,
-    Village,
-    Agent,
-    AgentGoal,
-    VillageGoal,
-    ChatRoom,
-    ChatMessage,
-    Summary,
-    AgentMemory,
-    ComputerUseSession,
-    ClaudeCodeSession,
-    ClaudeCodeMessage,
-    Event,
-    ComputerUseTurn,
-)
+Run: poetry run python3 ingest.py
+"""
+import sys
+from pathlib import Path
 
-# HF/polars leaves these as raw JSON strings rather than decoding them; the
-# model columns are JSON-typed, so decode before binding or they'd be stored
-# double-encoded.
-JSON_STRING_COLUMNS = {
-    ComputerUseTurn: ("agent_action", "agent_messages"),
-    ClaudeCodeMessage: ("content",),
-}
+import db  # noqa: E402
 
-# subset name -> model; order matches db.py's `order` (parents before children)
-LOAD_ORDER = [
-    ("villages", Village),
-    ("agents", Agent),
-    ("agent_goals", AgentGoal),
-    ("village_goals", VillageGoal),
-    ("chat_rooms", ChatRoom),
-    ("chat_messages", ChatMessage),
-    ("summaries", Summary),
-    ("agent_memories", AgentMemory),
-    ("computer_use_sessions", ComputerUseSession),
-    ("claude_code_sessions", ClaudeCodeSession),
-    ("claude_code_messages", ClaudeCodeMessage),
-    ("events", Event),
-    ("computer_use_turns", ComputerUseTurn),
-]
+# The repo has a local `datasets/` directory (swarmtraces corpus) which
+# shadows the `datasets` pip package when this script's own directory is on
+# sys.path. Drop it (now that db.py is already imported) before importing
+# the HF package.
+_REPO_ROOT = str(Path(__file__).resolve().parent)
+sys.path = [p for p in sys.path if p not in ("", ".", _REPO_ROOT)]
+
+from datasets import load_dataset  # noqa: E402
+
+HF_DATASET = "aidigestorg/ai-village"
 
 
-def _prepare_row(row, model):
-    if model is Event:
-        enrich_event(row, row)
-        return
-    for col in JSON_STRING_COLUMNS.get(model, ()):
-        v = row.get(col)
-        if isinstance(v, str):
-            row[col] = json.loads(v)
+def main():
+    db.Base.metadata.create_all(db.engine)
+    with db.engine.begin() as conn:
+        for model, subset in db.order:
+            table = model.__table__
+            columns = {c.name for c in table.columns}
+            conn.execute(table.delete())
 
-
-def batches(subset, model):
-    columns = None
-    for df in get_dataset(subset).to_polars(batch_size=BATCH, batched=True):
-        if columns is None:
-            columns = [c.key for c in model.__table__.columns if c.key in df.columns]
-        rows = df.select(columns).to_dicts()
-        for row in rows:
-            _prepare_row(row, model)
-        yield rows
-
-
-def load_subset(session, subset, model):
-    stmt = insert(model.__table__).prefix_with("OR IGNORE")
-    n = 0
-    for chunk in batches(subset, model):
-        session.execute(stmt, chunk)
-        session.commit()
-        n += len(chunk)
-    return n
+            ds = load_dataset(HF_DATASET, subset, split="train")
+            batch, total = [], 0
+            for row in ds:
+                row = dict(row)
+                if model is db.Event:
+                    db.enrich_event(row, row)
+                batch.append({k: v for k, v in row.items() if k in columns})
+                if len(batch) >= db.BATCH:
+                    conn.execute(table.insert(), batch)
+                    total += len(batch)
+                    batch.clear()
+            if batch:
+                conn.execute(table.insert(), batch)
+                total += len(batch)
+            print(f"{subset}: {total} rows -> {table.name}")
 
 
 if __name__ == "__main__":
-    Base.metadata.create_all(engine)
-    with Session(engine) as session:
-        for subset, model in LOAD_ORDER:
-            n = load_subset(session, subset, model)
-            print(f"{subset}: {n} rows")
+    main()
