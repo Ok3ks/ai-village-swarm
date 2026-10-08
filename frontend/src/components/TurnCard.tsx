@@ -38,7 +38,7 @@ export function TurnCard({ turn, isRoot, selected, onToggleSelect }: Props) {
           className="turn-select"
           checked={selected}
           onChange={() => onToggleSelect(turn.id)}
-          title="Select for summarize"
+          title="Add to chat"
         />
         <span className="turn-role">{ROLE_LABEL[turn.kind] ?? turn.kind}</span>
         {turn.subtype && <span className="turn-id">{turn.subtype}</span>}

@@ -115,6 +115,10 @@ export interface ClassifyResult {
 
 const CLASSIFY_LINE_RE = /^([^\s:]+)\s*:\s*([^\n—-]+?)\s*[—-]\s*(.*)$/;
 
+export function parseCategories(input: string): string[] {
+  return Array.from(new Set(input.split(",").map((c) => c.trim()).filter(Boolean)));
+}
+
 function buildClassifyPrompt(turns: Turn[], categories: string[]): string {
   const rendered = turns.map((t) => `### ${t.id}\n[${t.kind}] ${t.text}`).join("\n\n");
   return [

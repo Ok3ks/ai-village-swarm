@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ChatRoomRecord, SourceKind, TranscriptSummary } from "../lib/types";
+import { useAppStore } from "../lib/store";
+import type { SourceKind, TranscriptSummary } from "../lib/types";
 import { SidebarRow } from "./SidebarRow";
 
 const RENDER_CAP = 250;
@@ -21,27 +22,12 @@ function defaultSourceFor(group: Group): SourceKind {
 }
 
 interface Props {
-  source: SourceKind;
-  onSourceChange: (s: SourceKind) => void;
   rows: TranscriptSummary[];
   loadedChunks: number;
   totalChunks: number;
   loading: boolean;
   hasMore: boolean;
   onLoadMore: () => void;
-  treesCount: number;
-  orphansCount: number;
-  claudeCodeCount: number;
-  eventsCount: number;
-  selectedId: string | null;
-  onSelect: (s: TranscriptSummary) => void;
-  rooms: ChatRoomRecord[];
-  selectedRoomId: string | null;
-  onSelectRoom: (r: ChatRoomRecord) => void;
-  selectedEventIds: Set<string>;
-  onToggleEvent: (id: string) => void;
-  chatOpen: boolean;
-  onToggleChat: () => void;
 }
 
 // Numeric-id corpora (swarmtraces) don't carry real timestamps, but ids were
@@ -75,29 +61,22 @@ type Row =
   | { type: "divider"; key: string; label: string }
   | { type: "item"; key: string; row: TranscriptSummary };
 
-export function Sidebar({
-  source,
-  onSourceChange,
-  rows,
-  loadedChunks,
-  totalChunks,
-  loading,
-  hasMore,
-  onLoadMore,
-  treesCount,
-  orphansCount,
-  claudeCodeCount,
-  eventsCount,
-  selectedId,
-  onSelect,
-  rooms,
-  selectedRoomId,
-  onSelectRoom,
-  selectedEventIds,
-  onToggleEvent,
-  chatOpen,
-  onToggleChat,
-}: Props) {
+export function Sidebar({ rows, loadedChunks, totalChunks, loading, hasMore, onLoadMore }: Props) {
+  const source = useAppStore((s) => s.source);
+  const changeSource = useAppStore((s) => s.changeSource);
+  const selectedId = useAppStore((s) => s.selected?.id ?? null);
+  const selectTranscript = useAppStore((s) => s.selectTranscript);
+  const rooms = useAppStore((s) => s.rooms);
+  const selectedRoomId = useAppStore((s) => s.selectedRoom?.id ?? null);
+  const selectRoom = useAppStore((s) => s.selectRoom);
+  const selectedEventIds = useAppStore((s) => s.selectedEventIds);
+  const toggleEventSelection = useAppStore((s) => s.toggleEventSelection);
+  const clearEventSelection = useAppStore((s) => s.clearEventSelection);
+  const chatOpen = useAppStore((s) => s.chatOpen);
+  const toggleChatOpen = useAppStore((s) => s.toggleChatOpen);
+  const chatSelectionCount = useAppStore((s) => s.chatSelection.length);
+  const manifest = useAppStore((s) => s.manifest);
+
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<string | null>(null);
   const [agentFilter, setAgentFilter] = useState<string | null>(null);
@@ -171,43 +150,43 @@ export function Sidebar({
       <div className="group-toggle">
         <button
           className={group === "transcripts" ? "active" : ""}
-          onClick={() => onSourceChange(defaultSourceFor("transcripts"))}
+          onClick={() => changeSource(defaultSourceFor("transcripts"))}
         >
           Transcripts
         </button>
         <button
           className={group === "village" ? "active" : ""}
-          onClick={() => onSourceChange(defaultSourceFor("village"))}
+          onClick={() => changeSource(defaultSourceFor("village"))}
         >
           Village
         </button>
-        <button className={chatOpen ? "active" : ""} onClick={onToggleChat}>
-          💬 Chat
+        <button className={chatOpen ? "active" : ""} onClick={toggleChatOpen}>
+          💬 Chat{chatSelectionCount > 0 ? ` (${chatSelectionCount})` : ""}
         </button>
       </div>
       <div className="source-toggle">
         {group === "transcripts" ? (
           <>
-            <button className={source === "trees" ? "active" : ""} onClick={() => onSourceChange("trees")}>
-              Attack chains ({treesCount.toLocaleString()})
+            <button className={source === "trees" ? "active" : ""} onClick={() => changeSource("trees")}>
+              Attack chains ({(manifest?.trees.count ?? 0).toLocaleString()})
             </button>
-            <button className={source === "orphans" ? "active" : ""} onClick={() => onSourceChange("orphans")}>
-              Unanswered ({orphansCount.toLocaleString()})
+            <button className={source === "orphans" ? "active" : ""} onClick={() => changeSource("orphans")}>
+              Unanswered ({(manifest?.orphans.count ?? 0).toLocaleString()})
             </button>
           </>
         ) : (
           <>
-            <button className={source === "claudeCode" ? "active" : ""} onClick={() => onSourceChange("claudeCode")}>
-              Claude Code ({claudeCodeCount.toLocaleString()})
+            <button className={source === "claudeCode" ? "active" : ""} onClick={() => changeSource("claudeCode")}>
+              Claude Code ({(manifest?.claudeCode.count ?? 0).toLocaleString()})
             </button>
-            <button className={source === "network" ? "active" : ""} onClick={() => onSourceChange("network")}>
+            <button className={source === "network" ? "active" : ""} onClick={() => changeSource("network")}>
               Network
             </button>
-            <button className={source === "rooms" ? "active" : ""} onClick={() => onSourceChange("rooms")}>
+            <button className={source === "rooms" ? "active" : ""} onClick={() => changeSource("rooms")}>
               Rooms ({rooms.length.toLocaleString()})
             </button>
-            <button className={source === "events" ? "active" : ""} onClick={() => onSourceChange("events")}>
-              Events ({eventsCount.toLocaleString()})
+            <button className={source === "events" ? "active" : ""} onClick={() => changeSource("events")}>
+              Events ({(manifest?.events?.count ?? 0).toLocaleString()})
             </button>
           </>
         )}
@@ -252,7 +231,7 @@ export function Sidebar({
               key={r.id}
               selected={r.id === selectedRoomId}
               laneColor={laneColor(r.id)}
-              onClick={() => onSelectRoom(r)}
+              onClick={() => selectRoom(r)}
               title={`#${r.name ?? r.id}`}
               badges={[
                 {
@@ -316,7 +295,13 @@ export function Sidebar({
               filtered.length > RENDER_CAP ? `, showing first ${RENDER_CAP}` : ""
             }`}
         {source === "events" && selectedEventIds.size > 0 && (
-          <span className="selected-count"> · {selectedEventIds.size} selected</span>
+          <span className="selected-count">
+            {" "}
+            · {selectedEventIds.size} selected (in Chat) ·{" "}
+            <button className="link-btn" onClick={clearEventSelection}>
+              clear
+            </button>
+          </span>
         )}
       </div>
 
@@ -338,7 +323,7 @@ export function Sidebar({
               key={entry.key}
               selected={r.id === selectedId}
               laneColor={r.agentId ? laneColor(r.agentId) : NEUTRAL_LANE}
-              onClick={() => onSelect(r)}
+              onClick={() => selectTranscript(r)}
               title={r.id}
               badges={Object.entries(r.kindCounts).map(([k, v]) => ({
                 key: k,
@@ -350,8 +335,8 @@ export function Sidebar({
                 source === "events"
                   ? {
                       checked: selectedEventIds.has(r.id),
-                      onChange: () => onToggleEvent(r.id),
-                      title: "Select for batch summarize",
+                      onChange: () => toggleEventSelection(r),
+                      title: "Add to chat",
                     }
                   : undefined
               }

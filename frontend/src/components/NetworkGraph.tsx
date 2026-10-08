@@ -1,17 +1,11 @@
 import { useMemo, useState } from "react";
 import { onActivateKey } from "../lib/a11y";
-import type { CommEdge } from "../lib/types";
+import { useAppStore } from "../lib/store";
 
 const SIZE = 640;
 const CENTER = SIZE / 2;
 const RADIUS = SIZE / 2 - 90;
 const TOP_LABELS_WHEN_IDLE = 10;
-
-interface Props {
-  edges: CommEdge[];
-  nameById: Map<string, string>;
-  onChatAgent: (id: string) => void;
-}
 
 function laneColor(key: string): string {
   let h = 0;
@@ -19,7 +13,11 @@ function laneColor(key: string): string {
   return `hsl(${h % 360} 65% 60%)`;
 }
 
-export function NetworkGraph({ edges, nameById, onChatAgent }: Props) {
+export function NetworkGraph() {
+  const edges = useAppStore((s) => s.agentComms);
+  const agents = useAppStore((s) => s.agents);
+  const openAgentChat = useAppStore((s) => s.openAgentChat);
+  const nameById = useMemo(() => new Map(agents.map((a) => [a.id, a.name ?? a.id])), [agents]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [minCount, setMinCount] = useState(0);
 
@@ -165,7 +163,7 @@ export function NetworkGraph({ edges, nameById, onChatAgent }: Props) {
         <div className="network-detail">
           <div className="turn-header">
             <span className="turn-role">{nameById.get(selectedId) ?? selectedId}</span>
-            <button className="copy-btn" onClick={() => onChatAgent(selectedId)}>
+            <button className="copy-btn" onClick={() => openAgentChat(selectedId)}>
               chat about agent
             </button>
           </div>

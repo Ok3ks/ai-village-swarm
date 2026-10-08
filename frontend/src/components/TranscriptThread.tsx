@@ -1,26 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchTree } from "../lib/api";
+import { useAppStore } from "../lib/store";
 import type { Tree, TranscriptSummary, Turn } from "../lib/types";
 import { TurnCard } from "./TurnCard";
 
 const PAGE_SIZE = 150;
 
-interface Props {
-  summary: TranscriptSummary | null;
-  onSummarize: (turns: Turn[], label: string) => void;
-}
-
-export function TranscriptThread({ summary, onSummarize }: Props) {
+export function TranscriptThread({ summary }: { summary: TranscriptSummary | null }) {
   const [tree, setTree] = useState<Tree | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const chatSelection = useAppStore((s) => s.chatSelection);
+  const toggleChatSelection = useAppStore((s) => s.toggleChatSelection);
 
   useEffect(() => {
     setTree(null);
     setError(null);
     setVisibleCount(PAGE_SIZE);
-    setSelectedIds(new Set());
     if (!summary) return;
     let cancelled = false;
     fetchTree(summary)
@@ -35,22 +31,15 @@ export function TranscriptThread({ summary, onSummarize }: Props) {
     };
   }, [summary]);
 
-  const allTurns: Turn[] = useMemo(() => (tree ? [tree.root, ...tree.turns] : []), [tree]);
+  const turnsById = useMemo(() => {
+    if (!tree) return new Map<string, Turn>();
+    return new Map([tree.root, ...tree.turns].map((t) => [t.id, t]));
+  }, [tree]);
 
+  const isSelected = (id: string) => chatSelection.some((t) => t.id === id);
   const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const clearSelection = () => setSelectedIds(new Set());
-
-  const handleSummarize = () => {
-    const selected = allTurns.filter((t) => selectedIds.has(t.id));
-    onSummarize(selected, `Summarize ${selected.length} selected turn(s) from ${summary?.id ?? "transcript"}`);
+    const turn = turnsById.get(id);
+    if (turn) toggleChatSelection(turn);
   };
 
   if (!summary) {
@@ -82,29 +71,12 @@ export function TranscriptThread({ summary, onSummarize }: Props) {
 
   return (
     <div className="thread">
-      <div className="summarize-bar">
-        <span className="muted small">{selectedIds.size} turn(s) selected</span>
-        <button
-          className="summarize-btn"
-          disabled={selectedIds.size <= 1}
-          title={selectedIds.size <= 1 ? "Select more than one turn to summarize" : undefined}
-          onClick={handleSummarize}
-        >
-          Summarize selected
-        </button>
-        {selectedIds.size > 0 && (
-          <button className="expand-btn" onClick={clearSelection}>
-            Clear selection
-          </button>
-        )}
-      </div>
-
-      <TurnCard turn={tree.root} isRoot selected={selectedIds.has(tree.root.id)} onToggleSelect={toggleSelect} />
+      <TurnCard turn={tree.root} isRoot selected={isSelected(tree.root.id)} onToggleSelect={toggleSelect} />
       {tree.turns.length === 0 && (
         <div className="no-turns">No further turns were captured for this transcript.</div>
       )}
       {shown.map((t) => (
-        <TurnCard key={t.id} turn={t} isRoot={false} selected={selectedIds.has(t.id)} onToggleSelect={toggleSelect} />
+        <TurnCard key={t.id} turn={t} isRoot={false} selected={isSelected(t.id)} onToggleSelect={toggleSelect} />
       ))}
       {remaining > 0 && (
         <button className="expand-btn" onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}>

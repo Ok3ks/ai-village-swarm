@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { onActivateKey } from "../lib/a11y";
+import { useAppStore } from "../lib/store";
 import type { TranscriptSummary } from "../lib/types";
 
 const PX_PER_DAY = 22;
@@ -39,11 +40,11 @@ function monthTicks(min: number, max: number): { x: number; label: string }[] {
 
 interface Props {
   rows: TranscriptSummary[];
-  selectedId: string | null;
-  onSelect: (s: TranscriptSummary) => void;
 }
 
-export function Timeline({ rows, selectedId, onSelect }: Props) {
+export function Timeline({ rows }: Props) {
+  const selectedId = useAppStore((s) => s.selected?.id ?? null);
+  const selectTranscript = useAppStore((s) => s.selectTranscript);
   const allTimed = useMemo(
     () => rows.filter((r) => r.startTime && r.endTime) as (TranscriptSummary & { startTime: string; endTime: string })[],
     [rows]
@@ -126,12 +127,12 @@ export function Timeline({ rows, selectedId, onSelect }: Props) {
                   stroke={r.id === selectedId ? "var(--text)" : color}
                   strokeWidth={r.id === selectedId ? 2 : 0}
                   className="timeline-node"
-                  onClick={() => onSelect(r)}
+                  onClick={() => selectTranscript(r)}
                   role="button"
                   tabIndex={0}
                   aria-label={`${r.id}, ${r.startTime}`}
                   aria-pressed={r.id === selectedId}
-                  onKeyDown={onActivateKey(() => onSelect(r))}
+                  onKeyDown={onActivateKey(() => selectTranscript(r))}
                 >
                   <title>
                     {r.id} · {r.startTime}

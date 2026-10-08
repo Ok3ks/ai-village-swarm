@@ -1,21 +1,17 @@
-import { useEffect, useState } from "react";
+import { useAppStore } from "../lib/store";
 import { useRoomMessages } from "../lib/useRoomMessages";
-import type { ChatRoomRecord, Turn } from "../lib/types";
+import type { ChatRoomRecord } from "../lib/types";
 import { TurnCard } from "./TurnCard";
 
 interface Props {
   room: ChatRoomRecord | null;
   chunkFiles: string[] | undefined;
-  onSummarize: (turns: Turn[], label: string) => void;
 }
 
-export function RoomDetail({ room, chunkFiles, onSummarize }: Props) {
+export function RoomDetail({ room, chunkFiles }: Props) {
   const { turns, totalLoaded, hasMore, loadMore } = useRoomMessages(chunkFiles);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    setSelectedIds(new Set());
-  }, [room?.id]);
+  const chatSelection = useAppStore((s) => s.chatSelection);
+  const toggleChatSelection = useAppStore((s) => s.toggleChatSelection);
 
   if (!room) {
     return (
@@ -25,18 +21,10 @@ export function RoomDetail({ room, chunkFiles, onSummarize }: Props) {
     );
   }
 
+  const isSelected = (id: string) => chatSelection.some((t) => t.id === id);
   const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const handleSummarize = () => {
-    const selected = turns.filter((t) => selectedIds.has(t.id));
-    onSummarize(selected, `Summarize ${selected.length} selected message(s) from #${room.name ?? room.id}`);
+    const turn = turns.find((t) => t.id === id);
+    if (turn) toggleChatSelection(turn);
   };
 
   return (
@@ -85,27 +73,10 @@ export function RoomDetail({ room, chunkFiles, onSummarize }: Props) {
         <p className="muted small">No chat messages recorded for this room.</p>
       ) : (
         <>
-          <div className="summarize-bar">
-            <span className="muted small">
-              {selectedIds.size} message(s) selected · {totalLoaded.toLocaleString()} loaded
-            </span>
-            <button
-              className="summarize-btn"
-              disabled={selectedIds.size <= 1}
-              title={selectedIds.size <= 1 ? "Select more than one message to summarize" : undefined}
-              onClick={handleSummarize}
-            >
-              Summarize selected
-            </button>
-            {selectedIds.size > 0 && (
-              <button className="expand-btn" onClick={() => setSelectedIds(new Set())}>
-                Clear selection
-              </button>
-            )}
-          </div>
+          <p className="muted small">{totalLoaded.toLocaleString()} message(s) loaded</p>
 
           {turns.map((t) => (
-            <TurnCard key={t.id} turn={t} isRoot={false} selected={selectedIds.has(t.id)} onToggleSelect={toggleSelect} />
+            <TurnCard key={t.id} turn={t} isRoot={false} selected={isSelected(t.id)} onToggleSelect={toggleSelect} />
           ))}
 
           {hasMore && (
