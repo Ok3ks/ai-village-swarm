@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { buildAgentProfileTurn } from "./agentProfile";
-import { fetchAgentComms, fetchAgents, fetchChatRooms, fetchManifest, fetchTree } from "./api";
+import { fetchAgentComms, fetchAgents, fetchChatRooms, fetchManifest } from "./api";
+import { providerInfo, type ProviderId } from "./providers";
 import type {
   AgentRecord,
   ChatRoomRecord,
@@ -11,7 +12,23 @@ import type {
   Turn,
 } from "./types";
 
-const DISCARD_CHAT_MESSAGE = "You have an ongoing chat conversation that hasn't been saved. Discard it?";
+const SETTINGS_STORAGE_KEY = "llmSettings";
+
+interface LlmSettings {
+  provider: ProviderId;
+  model: string;
+  apiKey: string;
+}
+
+function loadLlmSettings(): LlmSettings {
+  const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+  if (raw) return JSON.parse(raw);
+  return { provider: "local", model: providerInfo("local").defaultModel, apiKey: "" };
+}
+
+function saveLlmSettings(settings: LlmSettings) {
+  localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+}
 
 interface AppStore {
   // ---- fetched data ----
@@ -28,19 +45,20 @@ interface AppStore {
   source: SourceKind;
   selected: TranscriptSummary | null;
   selectedRoom: ChatRoomRecord | null;
+  selectedAgentFeed: string | null;
+  selectedNetworkNode: string | null;
+  // Agents tab: list agents (click -> all their events) or a flat
+  // chronological stream of individual events (click -> that one event).
+  eventsViewMode: "agent" | "chronological";
   sidebarOpen: boolean;
-  showTimeline: boolean;
   changeSource: (s: SourceKind) => void;
   selectTranscript: (r: TranscriptSummary | null) => void;
   selectRoom: (r: ChatRoomRecord | null) => void;
+  selectAgentFeed: (agentName: string | null) => void;
+  selectNetworkNode: (id: string | null) => void;
+  setEventsViewMode: (m: "agent" | "chronological") => void;
   setSidebarOpen: (v: boolean) => void;
   toggleSidebarOpen: () => void;
-  toggleShowTimeline: () => void;
-
-  // ---- events multi-select (Events tab checkboxes; drives Classify) ----
-  selectedEventIds: Set<string>;
-  toggleEventSelection: (row: TranscriptSummary) => void;
-  clearEventSelection: () => void;
 
   // ---- unified "chat cart": turns the user has selected anywhere in the
   // app (events, room chat messages, transcript turns, agent profiles) to
@@ -53,13 +71,21 @@ interface AppStore {
   clearChatSelection: () => void;
 
   // ---- chat panel ----
-  chatOpen: boolean;
-  chatDirty: boolean;
-  setChatDirty: (v: boolean) => void;
-  toggleChatOpen: () => void;
-  closeChat: () => void;
   openAgentChat: (id: string) => void;
+
+  // ---- LLM provider settings (configuration only for now; not yet wired
+  // into sendChatMessages/summarizeTurns/classifyTurns) ----
+  settingsOpen: boolean;
+  llmProvider: ProviderId;
+  llmModel: string;
+  llmApiKey: string;
+  toggleSettingsOpen: () => void;
+  setLlmProvider: (p: ProviderId) => void;
+  setLlmModel: (m: string) => void;
+  setLlmApiKey: (k: string) => void;
 }
+
+const initialLlmSettings = loadLlmSettings();
 
 export const useAppStore = create<AppStore>((set, get) => ({
   manifest: null,
@@ -91,54 +117,28 @@ export const useAppStore = create<AppStore>((set, get) => ({
   source: "claudeCode",
   selected: null,
   selectedRoom: null,
+  selectedAgentFeed: null,
+  selectedNetworkNode: null,
+  eventsViewMode: "agent",
   sidebarOpen: false,
-  showTimeline: true,
 
   changeSource: (s) =>
     set({
       source: s,
       selected: null,
       selectedRoom: null,
-      selectedEventIds: new Set(),
+      selectedAgentFeed: null,
+      selectedNetworkNode: null,
       sidebarOpen: false,
     }),
 
   selectTranscript: (r) => set({ selected: r, sidebarOpen: false }),
   selectRoom: (r) => set({ selectedRoom: r, sidebarOpen: false }),
+  selectAgentFeed: (agentName) => set({ selectedAgentFeed: agentName, sidebarOpen: false }),
+  selectNetworkNode: (id) => set({ selectedNetworkNode: id }),
+  setEventsViewMode: (m) => set({ eventsViewMode: m }),
   setSidebarOpen: (v) => set({ sidebarOpen: v }),
   toggleSidebarOpen: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
-  toggleShowTimeline: () => set((s) => ({ showTimeline: !s.showTimeline })),
-
-  selectedEventIds: new Set(),
-
-  toggleEventSelection: (row) => {
-    const { selectedEventIds, chatSelection } = get();
-    const isSelected = selectedEventIds.has(row.id);
-    const nextIds = new Set(selectedEventIds);
-    if (isSelected) {
-      nextIds.delete(row.id);
-      set({ selectedEventIds: nextIds, chatSelection: chatSelection.filter((t) => t.id !== row.id) });
-      return;
-    }
-    nextIds.add(row.id);
-    set({ selectedEventIds: nextIds });
-    fetchTree(row)
-      .then((tree) => {
-        const state = get();
-        if (state.selectedEventIds.has(row.id) && !state.chatSelection.some((t) => t.id === row.id)) {
-          set({ chatSelection: [...state.chatSelection, tree.root] });
-        }
-      })
-      .catch((e) => set((s) => ({ fetchErrors: [...s.fetchErrors, `Failed to load event ${row.id}: ${e}`] })));
-  },
-
-  clearEventSelection: () => {
-    const { selectedEventIds, chatSelection } = get();
-    set({
-      selectedEventIds: new Set(),
-      chatSelection: chatSelection.filter((t) => !selectedEventIds.has(t.id)),
-    });
-  },
 
   chatSelection: [],
 
@@ -158,25 +158,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   clearChatSelection: () => set({ chatSelection: [] }),
 
-  chatOpen: false,
-  chatDirty: false,
-  setChatDirty: (v) => set({ chatDirty: v }),
-
-  toggleChatOpen: () => {
-    const { chatOpen } = get();
-    if (chatOpen) {
-      get().closeChat();
-    } else {
-      set({ chatOpen: true });
-    }
-  },
-
-  closeChat: () => {
-    const { chatDirty } = get();
-    if (chatDirty && !window.confirm(DISCARD_CHAT_MESSAGE)) return;
-    set({ chatOpen: false, chatDirty: false });
-  },
-
   openAgentChat: (id) => {
     const { agents, rooms, agentComms } = get();
     const agent = agents.find((a) => a.id === id);
@@ -184,6 +165,28 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const nameById = new Map(agents.map((a) => [a.id, a.name ?? a.id]));
     const turn = buildAgentProfileTurn(agent, agents, rooms, agentComms, nameById);
     get().addToChatSelection(turn);
-    set({ chatOpen: true });
+  },
+
+  settingsOpen: false,
+  llmProvider: initialLlmSettings.provider,
+  llmModel: initialLlmSettings.model,
+  llmApiKey: initialLlmSettings.apiKey,
+
+  toggleSettingsOpen: () => set((s) => ({ settingsOpen: !s.settingsOpen })),
+
+  setLlmProvider: (p) => {
+    const model = providerInfo(p).defaultModel;
+    set({ llmProvider: p, llmModel: model });
+    saveLlmSettings({ provider: p, model, apiKey: get().llmApiKey });
+  },
+
+  setLlmModel: (m) => {
+    set({ llmModel: m });
+    saveLlmSettings({ provider: get().llmProvider, model: m, apiKey: get().llmApiKey });
+  },
+
+  setLlmApiKey: (k) => {
+    set({ llmApiKey: k });
+    saveLlmSettings({ provider: get().llmProvider, model: get().llmModel, apiKey: k });
   },
 }));

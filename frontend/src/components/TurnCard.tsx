@@ -15,10 +15,6 @@ const ROLE_LABEL: Record<Turn["kind"], string> = {
   chat: "CHAT MESSAGE",
 };
 
-function copy(text: string) {
-  navigator.clipboard?.writeText(text).catch(() => {});
-}
-
 interface Props {
   turn: Turn;
   isRoot: boolean;
@@ -43,11 +39,13 @@ export function TurnCard({ turn, isRoot, selected, onToggleSelect }: Props) {
         <span className="turn-role">{ROLE_LABEL[turn.kind] ?? turn.kind}</span>
         {turn.subtype && <span className="turn-id">{turn.subtype}</span>}
         <span className="turn-id">{turn.id}</span>
-        {turn.cite && <span className="turn-cite">{turn.cite}</span>}
+        {turn.cite &&
+          (turn.kind === "chat" ? (
+            <span className="turn-agent">{turn.cite}</span>
+          ) : (
+            <span className="turn-cite">{turn.cite}</span>
+          ))}
         {turn.createdAt && <span className="turn-cite">{turn.createdAt}</span>}
-        <button className="copy-btn" onClick={() => copy(turn.text)} title="Copy raw text">
-          copy
-        </button>
       </div>
       {turn.tags && turn.tags.length > 0 && (
         <div className="turn-tags">
@@ -62,7 +60,11 @@ export function TurnCard({ turn, isRoot, selected, onToggleSelect }: Props) {
         {expanded ? turn.text : `${turn.text.slice(0, COLLAPSE_THRESHOLD)}…`}
       </pre>
       {long && (
-        <button className="expand-btn" onClick={() => setExpanded((e) => !e)}>
+        <button
+          className="expand-btn"
+          onClick={() => setExpanded((e) => !e)}
+          title={expanded ? "Collapse back to a preview" : "Show the full, untruncated text"}
+        >
           {expanded ? "Show less" : `Show all (${turn.text.length.toLocaleString()} chars)`}
         </button>
       )}

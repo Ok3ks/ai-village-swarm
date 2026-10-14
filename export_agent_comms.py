@@ -5,8 +5,16 @@ Builds an undirected agent-to-agent communication graph from chat_messages
 of one agent addressing another specifically (room co-membership alone
 doesn't tell you who's talking to whom).
 
+@-mentions aren't only of tracked agents -- messages also address humans
+(e.g. "@george", a village operator with no row in `agents`) who'd
+otherwise be silently dropped. Any @-mention that doesn't match a known
+agent name is still captured, keyed by the lowercased mentioned name
+itself, so every @ reference shows up somewhere rather than only the
+ones that happen to resolve to a tracked agent.
+
 Output: frontend/public/data/agent_comms.json -- a flat list of
-{a, b, count} edges, keyed by agent id.
+{a, b, count} edges, keyed by agent id (or the lowercased name for
+unresolved mentions).
 
 Run: python3 export_agent_comms.py
 """
@@ -30,8 +38,14 @@ def main():
         name_to_id.setdefault(name, agent_id)
 
     # Longest names first so e.g. "Claude Opus 4.8" matches before "Claude".
+    # A generic single-token fallback (no spaces) comes last in the
+    # alternation, so it only kicks in once none of the known full names
+    # match at that position -- this is what catches "@george".
     names_sorted = sorted(name_to_id.keys(), key=len, reverse=True)
-    pattern = re.compile(r"@(" + "|".join(re.escape(n) for n in names_sorted) + r")\b")
+    known_alt = "|".join(re.escape(n) for n in names_sorted)
+    generic_alt = r"\w[\w'-]*"
+    alternatives = f"{known_alt}|{generic_alt}" if known_alt else generic_alt
+    pattern = re.compile(r"@(" + alternatives + r")\b")
 
     edge_counts = defaultdict(int)
     cur = conn.execute(
@@ -40,8 +54,9 @@ def main():
     )
     for speaker_id, content in cur:
         for m in pattern.finditer(content):
-            mentioned_id = name_to_id.get(m.group(1))
-            if not mentioned_id or mentioned_id == speaker_id:
+            name = m.group(1)
+            mentioned_id = name_to_id.get(name) or name.lower()
+            if mentioned_id == speaker_id:
                 continue
             key = tuple(sorted((speaker_id, mentioned_id)))
             edge_counts[key] += 1

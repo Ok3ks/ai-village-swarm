@@ -18,8 +18,6 @@ export function ChatPanel() {
   const chatSelection = useAppStore((s) => s.chatSelection);
   const removeFromChatSelection = useAppStore((s) => s.removeFromChatSelection);
   const clearChatSelection = useAppStore((s) => s.clearChatSelection);
-  const closeChat = useAppStore((s) => s.closeChat);
-  const setChatDirty = useAppStore((s) => s.setChatDirty);
 
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState("");
@@ -35,11 +33,6 @@ export function ChatPanel() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setChatDirty(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, error]);
 
@@ -48,7 +41,6 @@ export function ChatPanel() {
     setMessages(next);
     setError(null);
     setSending(true);
-    setChatDirty(true);
     try {
       const reply = await sendChatMessages(next.map(({ role, content }) => ({ role, content })));
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
@@ -97,9 +89,6 @@ export function ChatPanel() {
     <aside className="metadata-panel chat-panel">
       <div className="chat-header">
         <h2>Chat · {MODEL}</h2>
-        <button className="copy-btn" onClick={closeChat}>
-          close
-        </button>
       </div>
 
       {chatSelection.length > 0 && (
@@ -113,7 +102,10 @@ export function ChatPanel() {
           <ul className="chat-cart-list">
             {chatSelection.map((t) => (
               <li key={t.id}>
-                <span className="chat-cart-item-text">
+                <span
+                  className="chat-cart-item-text"
+                  title={t.cite ? `${t.cite}: ${t.text}` : t.text}
+                >
                   {t.cite ? `${t.cite}: ` : ""}
                   {t.text.slice(0, 80)}
                 </span>

@@ -11,13 +11,14 @@ interface Props {
   selected: boolean;
   laneColor: string;
   title: ReactNode;
+  tooltip?: string;
   badges?: Badge[];
   preview: ReactNode;
   onClick: () => void;
   checkbox?: { checked: boolean; onChange: () => void; title?: string };
 }
 
-export function SidebarRow({ selected, laneColor, title, badges, preview, onClick, checkbox }: Props) {
+export function SidebarRow({ selected, laneColor, title, tooltip, badges, preview, onClick, checkbox }: Props) {
   return (
     <li
       className={`timeline-item ${selected ? "selected" : ""}`}
@@ -25,6 +26,7 @@ export function SidebarRow({ selected, laneColor, title, badges, preview, onClic
       role="button"
       tabIndex={0}
       aria-pressed={selected}
+      title={tooltip}
       onKeyDown={onActivateKey(onClick)}
     >
       {checkbox && (

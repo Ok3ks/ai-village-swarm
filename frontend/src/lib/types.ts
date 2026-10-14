@@ -73,6 +73,7 @@ export interface Manifest {
   events?: SourceManifest;
   agentComms?: FlatFileManifest;
   roomMessages?: Record<string, { count: number; chunkFiles: string[] }>;
+  agentPairMessages?: Record<string, { count: number; chunkFiles: string[] }>;
 }
 
 export interface CommEdge {
