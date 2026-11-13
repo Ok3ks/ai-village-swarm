@@ -61,10 +61,10 @@ export function RoomDetail({ room, chunkFiles }: Props) {
           <dt>Village</dt>
           <dd>{room.villageId}</dd>
           <dt>Last nudger run</dt>
-          <dd>{room.lastNudgerRunAt ?? <em>never</em>}</dd>
+          <dd>{room.lastNudgerRunAt?.split(".")[0] ?? <em>never</em>}</dd>
           <dt>Created / updated</dt>
           <dd>
-            {room.createdAt} → {room.updatedAt}
+            {room.createdAt?.split(".")[0]} → {room.updatedAt?.split(".")[0]}
           </dd>
         </dl>
       </div>

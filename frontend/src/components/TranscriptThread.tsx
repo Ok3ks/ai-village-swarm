@@ -68,9 +68,20 @@ export function TranscriptThread({ summary }: { summary: TranscriptSummary | nul
 
   const shown = tree.turns.slice(0, visibleCount);
   const remaining = tree.turns.length - shown.length;
+  const dateRange =
+    summary.startTime &&
+    (summary.endTime && summary.endTime.slice(0, 10) !== summary.startTime.slice(0, 10)
+      ? `${summary.startTime.slice(0, 10)} → ${summary.endTime.slice(0, 10)}`
+      : summary.startTime.slice(0, 10));
 
   return (
     <div className="thread">
+      <div className="thread-context">
+        <span className="thread-context-title">{summary.agentName ?? summary.id}</span>
+        {summary.agentName && <span className="muted small">{summary.id}</span>}
+        {dateRange && <span className="muted small">{dateRange}</span>}
+        <span className="muted small">{summary.turnCount.toLocaleString()} turn(s)</span>
+      </div>
       <TurnCard turn={tree.root} isRoot selected={isSelected(tree.root.id)} onToggleSelect={toggleSelect} />
       {tree.turns.length === 0 && (
         <div className="no-turns">No further turns were captured for this transcript.</div>

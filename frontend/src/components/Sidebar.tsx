@@ -276,7 +276,9 @@ export function Sidebar({ rows, loadedChunks, totalChunks, loading, hasMore, onL
               tooltip={`${r.id} — ${r.preview}${r.startTime ? ` @ ${r.startTime}` : ""}`}
               badges={Object.entries(r.kindCounts).map(([k, v]) => ({
                 key: k,
-                label: v,
+                // Without per-kind colors a bare count is unreadable -- say
+                // what it counts.
+                label: `${v} ${k.toLowerCase()}`,
                 className: `badge-${k}`,
               }))}
               preview={r.preview || <em>(empty)</em>}

@@ -452,17 +452,20 @@ select:focus-visible {
   justify-content: space-between;
   align-items: baseline;
   gap: 0.4rem;
+  flex-wrap: wrap;
 }
 
 .row-id {
   font-family: var(--font-mono);
   font-size: 0.72rem;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .row-badges {
   display: flex;
   gap: 0.25rem;
+  flex-wrap: wrap;
 }
 
 .badge {
@@ -686,6 +689,41 @@ select:focus-visible {
   align-items: center;
   gap: 0.6rem;
   margin-bottom: 0.4rem;
+}
+
+/* Right-align the timestamp so every card's time sits in the same place,
+   scannable down the thread like a chat log. */
+.turn-time {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* Sticky "what am I reading" strip above a transcript's turns. */
+.thread-context {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.9rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.thread-context-title {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.chat-model {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .turn-role {

@@ -88,7 +88,10 @@ export function ChatPanel() {
   return (
     <aside className="metadata-panel chat-panel">
       <div className="chat-header">
-        <h2>Chat · {MODEL}</h2>
+        <h2>Chat</h2>
+        <span className="muted small chat-model" title={MODEL}>
+          {MODEL.split("/").pop()}
+        </span>
       </div>
 
       {chatSelection.length > 0 && (

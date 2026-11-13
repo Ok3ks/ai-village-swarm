@@ -15,6 +15,12 @@ const ROLE_LABEL: Record<Turn["kind"], string> = {
   chat: "CHAT MESSAGE",
 };
 
+// Timestamps come with microsecond precision ("2026-01-26 19:05:50.026214");
+// seconds are plenty for reading -- full value stays in the tooltip.
+function formatTs(ts: string): string {
+  return ts.split(".")[0];
+}
+
 interface Props {
   turn: Turn;
   isRoot: boolean;
@@ -36,16 +42,20 @@ export function TurnCard({ turn, isRoot, selected, onToggleSelect }: Props) {
           onChange={() => onToggleSelect(turn.id)}
           title="Add to chat"
         />
-        <span className="turn-role">{ROLE_LABEL[turn.kind] ?? turn.kind}</span>
-        {turn.subtype && <span className="turn-id">{turn.subtype}</span>}
-        <span className="turn-id">{turn.id}</span>
+        <span className="turn-role" title={`${turn.id}${turn.subtype ? ` · ${turn.subtype}` : ""}`}>
+          {ROLE_LABEL[turn.kind] ?? turn.kind}
+        </span>
         {turn.cite &&
           (turn.kind === "chat" ? (
             <span className="turn-agent">{turn.cite}</span>
           ) : (
             <span className="turn-cite">{turn.cite}</span>
           ))}
-        {turn.createdAt && <span className="turn-cite">{turn.createdAt}</span>}
+        {turn.createdAt && (
+          <span className="turn-cite turn-time" title={turn.createdAt}>
+            {formatTs(turn.createdAt)}
+          </span>
+        )}
       </div>
       {turn.tags && turn.tags.length > 0 && (
         <div className="turn-tags">
