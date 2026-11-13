@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { allMemories, CONFIG_KIND_LABEL, configItems, formatBytes } from "../lib/claudeHome";
 import { displayName, nodeDegrees, nodesByDegree } from "../lib/network";
 import { useAppStore } from "../lib/store";
 import type { SourceKind, TranscriptSummary } from "../lib/types";
@@ -6,20 +7,24 @@ import { SidebarRow } from "./SidebarRow";
 
 const RENDER_CAP = 250;
 
-type Group = "transcripts" | "village";
+type Group = "transcripts" | "village" | "claude";
 
 // Claude Code transcripts come from agents running inside this village, and
 // Events/Rooms/Network are the village's own activity log -- all distinct
 // from the swarmtraces attack corpus, which is an unrelated external
 // dataset (the only thing left in the "Transcripts" group).
 const VILLAGE_SOURCES: SourceKind[] = ["claudeCode", "rooms", "network", "events"];
+// The local Claude Code home directory (export_claude_home.py) -- the user's
+// own agent, rather than the village's.
+const CLAUDE_SOURCES: SourceKind[] = ["claudePreferences", "claudeStructure", "claudeProjects", "claudeConfig"];
 
 function groupOf(source: SourceKind): Group {
+  if (CLAUDE_SOURCES.includes(source)) return "claude";
   return VILLAGE_SOURCES.includes(source) ? "village" : "transcripts";
 }
 
 function defaultSourceFor(group: Group): SourceKind {
-  return group === "transcripts" ? "trees" : "claudeCode";
+  return group === "transcripts" ? "trees" : group === "village" ? "claudeCode" : "claudePreferences";
 }
 
 interface Props {
@@ -73,6 +78,9 @@ export function Sidebar({ rows, loadedChunks, totalChunks, loading, hasMore, onL
   const selectedNetworkNode = useAppStore((s) => s.selectedNetworkNode);
   const selectNetworkNode = useAppStore((s) => s.selectNetworkNode);
   const manifest = useAppStore((s) => s.manifest);
+  const claudeHome = useAppStore((s) => s.claudeHome);
+  const selectedClaudeItem = useAppStore((s) => s.selectedClaudeItem);
+  const selectClaudeItem = useAppStore((s) => s.selectClaudeItem);
 
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<string | null>(null);
@@ -312,9 +320,47 @@ export function Sidebar({ rows, loadedChunks, totalChunks, loading, hasMore, onL
         >
           Village
         </button>
+        <button
+          className={group === "claude" ? "active" : ""}
+          onClick={() => changeSource(defaultSourceFor("claude"))}
+          title="Your local Claude Code home directory: structure, projects and config"
+        >
+          ~/.claude
+        </button>
       </div>
       <div className="source-toggle">
-        {group === "transcripts" ? (
+        {group === "claude" ? (
+          <>
+            <button
+              className={source === "claudePreferences" ? "active" : ""}
+              onClick={() => changeSource("claudePreferences")}
+              title="How you've asked Claude to work: saved feedback/user memories across all projects, plus settings"
+            >
+              Preferences
+            </button>
+            <button
+              className={source === "claudeStructure" ? "active" : ""}
+              onClick={() => changeSource("claudeStructure")}
+              title="What's in ~/.claude, sized by disk usage"
+            >
+              Structure
+            </button>
+            <button
+              className={source === "claudeProjects" ? "active" : ""}
+              onClick={() => changeSource("claudeProjects")}
+              title="Per-project prompts, sessions and saved memories"
+            >
+              Projects ({(claudeHome?.projects.length ?? 0).toLocaleString()})
+            </button>
+            <button
+              className={source === "claudeConfig" ? "active" : ""}
+              onClick={() => changeSource("claudeConfig")}
+              title="Settings, skills, plugins and plans"
+            >
+              Config
+            </button>
+          </>
+        ) : group === "transcripts" ? (
           <>
             <button
               className={source === "trees" ? "active" : ""}
@@ -366,6 +412,147 @@ export function Sidebar({ rows, loadedChunks, totalChunks, loading, hasMore, onL
       </div>
     </div>
   );
+
+  if (group === "claude") {
+    const q = query.trim().toLowerCase();
+    const matches = (...fields: (string | null | undefined)[]) =>
+      !q || fields.some((f) => f?.toLowerCase().includes(q));
+    const search = (placeholder: string) => (
+      <div className="sidebar-search">
+        <input type="text" placeholder={placeholder} value={query} onChange={(e) => setQuery(e.target.value)} />
+      </div>
+    );
+
+    if (!claudeHome) {
+      return (
+        <aside className="sidebar">
+          {header}
+          <div className="sidebar-status">
+            {manifest?.claudeHome ? "Loading…" : "No export yet — run export_claude_home.py"}
+          </div>
+        </aside>
+      );
+    }
+
+    if (source === "claudePreferences") {
+      const entries = allMemories(claudeHome).filter((e) =>
+        matches(e.memory.name, e.memory.description, e.memory.type, e.project.name)
+      );
+      const prefCount = entries.filter((e) => e.isPreference).length;
+      return (
+        <aside className="sidebar">
+          {header}
+          {search("Search preferences…")}
+          <div className="sidebar-status">
+            {prefCount} preference(s) · {entries.length - prefCount} other memories
+          </div>
+          <ul className="transcript-list">
+            {entries.map((e) => (
+              <SidebarRow
+                key={e.id}
+                selected={e.id === selectedClaudeItem}
+                laneColor={e.isPreference ? NEUTRAL_LANE : "var(--border)"}
+                onClick={() => selectClaudeItem(e.id === selectedClaudeItem ? null : e.id)}
+                title={e.memory.name}
+                tooltip={`${e.memory.name} (${e.memory.type}, ${e.project.path}) — ${e.memory.description}`}
+                badges={[
+                  { key: "type", label: e.memory.type },
+                  { key: "project", label: e.project.name },
+                ]}
+                preview={e.memory.description || <em>—</em>}
+              />
+            ))}
+          </ul>
+        </aside>
+      );
+    }
+
+    if (source === "claudeStructure") {
+      const top = (claudeHome.tree.children ?? []).filter((c) => matches(c.name, c.description));
+      const selectedTop = selectedClaudeItem?.split("/")[0] ?? null;
+      return (
+        <aside className="sidebar">
+          {header}
+          {search("Search entries…")}
+          <div className="sidebar-status">
+            {top.length.toLocaleString()} top-level entries, largest first
+          </div>
+          <ul className="transcript-list">
+            {top.map((c) => (
+              <SidebarRow
+                key={c.path}
+                selected={c.name === selectedTop}
+                laneColor={NEUTRAL_LANE}
+                onClick={() => selectClaudeItem(c.name === selectedClaudeItem ? null : c.path)}
+                title={`${c.name}${c.isDir ? "/" : ""}`}
+                tooltip={`${c.name} — ${formatBytes(c.bytes)}, ${c.files.toLocaleString()} file(s)`}
+                badges={[
+                  ...(c.sensitivity
+                    ? [{ key: "sensitive", label: `sensitive · ${c.sensitivity}`, className: "badge-sensitive" }]
+                    : []),
+                  { key: "size", label: formatBytes(c.bytes) },
+                  ...(c.isDir ? [{ key: "files", label: `${c.files.toLocaleString()} files` }] : []),
+                ]}
+                preview={c.description || <em>—</em>}
+              />
+            ))}
+          </ul>
+        </aside>
+      );
+    }
+
+    if (source === "claudeProjects") {
+      const projects = claudeHome.projects.filter((p) => matches(p.name, p.path));
+      return (
+        <aside className="sidebar">
+          {header}
+          {search("Search project…")}
+          <div className="sidebar-status">{projects.length.toLocaleString()} project(s), most recent first</div>
+          <ul className="transcript-list">
+            {projects.map((p) => (
+              <SidebarRow
+                key={p.slug}
+                selected={p.slug === selectedClaudeItem}
+                laneColor={NEUTRAL_LANE}
+                onClick={() => selectClaudeItem(p.slug === selectedClaudeItem ? null : p.slug)}
+                title={p.name}
+                tooltip={`${p.path}${p.lastActive ? ` — last active ${p.lastActive}` : ""}`}
+                badges={[
+                  { key: "prompts", label: `${p.promptCount.toLocaleString()} prompts` },
+                  ...(p.memories.length ? [{ key: "memories", label: `${p.memories.length} memories` }] : []),
+                ]}
+                preview={p.path}
+              />
+            ))}
+          </ul>
+        </aside>
+      );
+    }
+
+    const items = configItems(claudeHome).filter((i) => matches(i.title, i.preview, i.kind));
+    const activeId = selectedClaudeItem ?? configItems(claudeHome)[0]?.id;
+    return (
+      <aside className="sidebar">
+        {header}
+        {search("Search settings, skills, plugins…")}
+        <div className="sidebar-status">{items.length.toLocaleString()} item(s)</div>
+        <ul className="transcript-list">
+          {items.map((i) => (
+            <SidebarRow
+              key={i.id}
+              selected={i.id === activeId}
+              laneColor={NEUTRAL_LANE}
+              onClick={() => selectClaudeItem(i.id)}
+              title={i.title}
+              tooltip={`${i.title} — ${i.preview}`}
+              badges={[{ key: "kind", label: CONFIG_KIND_LABEL[i.kind] }]}
+              preview={i.preview || <em>—</em>}
+            />
+          ))}
+        </ul>
+      </aside>
+    );
+  }
 
   if (source === "network") {
     return (

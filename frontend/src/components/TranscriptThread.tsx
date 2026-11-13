@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { fetchTree } from "../lib/api";
 import { useAppStore } from "../lib/store";
 import type { Tree, TranscriptSummary, Turn } from "../lib/types";
@@ -6,7 +6,7 @@ import { TurnCard } from "./TurnCard";
 
 const PAGE_SIZE = 150;
 
-export function TranscriptThread({ summary }: { summary: TranscriptSummary | null }) {
+export function TranscriptThread({ summary, actions }: { summary: TranscriptSummary | null; actions?: ReactNode }) {
   const [tree, setTree] = useState<Tree | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -81,6 +81,7 @@ export function TranscriptThread({ summary }: { summary: TranscriptSummary | nul
         {summary.agentName && <span className="muted small">{summary.id}</span>}
         {dateRange && <span className="muted small">{dateRange}</span>}
         <span className="muted small">{summary.turnCount.toLocaleString()} turn(s)</span>
+        {actions}
       </div>
       <TurnCard turn={tree.root} isRoot selected={isSelected(tree.root.id)} onToggleSelect={toggleSelect} />
       {tree.turns.length === 0 && (

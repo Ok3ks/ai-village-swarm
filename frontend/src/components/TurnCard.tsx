@@ -13,6 +13,8 @@ const ROLE_LABEL: Record<Turn["kind"], string> = {
   result: "RESULT",
   event: "EVENT",
   chat: "CHAT MESSAGE",
+  config: "~/.CLAUDE",
+  prompt: "PROMPT",
 };
 
 // Timestamps come with microsecond precision ("2026-01-26 19:05:50.026214");

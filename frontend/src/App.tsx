@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import "./App.css";
 import { AgentFeed } from "./components/AgentFeed";
+import { ClaudeHomeView } from "./components/ClaudeHomeView";
 import { ChatPanel } from "./components/ChatPanel";
 import { NetworkGraph } from "./components/NetworkGraph";
 import { OrientationHint } from "./components/OrientationHint";
@@ -119,6 +120,8 @@ function App() {
             room={selectedRoom}
             chunkFiles={selectedRoom ? manifest?.roomMessages?.[selectedRoom.id]?.chunkFiles : undefined}
           />
+        ) : source === "claudePreferences" || source === "claudeStructure" || source === "claudeProjects" || source === "claudeConfig" ? (
+          <ClaudeHomeView />
         ) : source === "network" ? (
           <div className="thread">
             <NetworkGraph />

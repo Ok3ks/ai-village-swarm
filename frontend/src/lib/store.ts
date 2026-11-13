@@ -1,10 +1,12 @@
 import { create } from "zustand";
 import { buildAgentProfileTurn } from "./agentProfile";
-import { fetchAgentComms, fetchAgents, fetchChatRooms, fetchManifest } from "./api";
+import { fetchAgentComms, fetchAgents, fetchChatRooms, fetchClaudeHome, fetchClaudeSensitive, fetchManifest } from "./api";
 import { providerInfo, type ProviderId } from "./providers";
 import type {
   AgentRecord,
   ChatRoomRecord,
+  ClaudeHome,
+  ClaudeSensitive,
   CommEdge,
   Manifest,
   SourceKind,
@@ -37,6 +39,10 @@ interface AppStore {
   agents: AgentRecord[];
   rooms: ChatRoomRecord[];
   agentComms: CommEdge[];
+  // Optional: only present once export_claude_home.py has been run.
+  claudeHome: ClaudeHome | null;
+  // Prompt text and raw settings; only when exported without --no-sensitive.
+  claudeSensitive: ClaudeSensitive | null;
   fetchErrors: string[];
   init: () => void;
   dismissFetchErrors: () => void;
@@ -47,6 +53,9 @@ interface AppStore {
   selectedRoom: ChatRoomRecord | null;
   selectedAgentFeed: string | null;
   selectedNetworkNode: string | null;
+  // ~/.claude tabs: a tree path (Structure), project slug (Projects) or
+  // "<kind>:<name>" config item (Config).
+  selectedClaudeItem: string | null;
   // Agents tab: list agents (click -> all their events) or a flat
   // chronological stream of individual events (click -> that one event).
   eventsViewMode: "agent" | "chronological";
@@ -56,6 +65,7 @@ interface AppStore {
   selectRoom: (r: ChatRoomRecord | null) => void;
   selectAgentFeed: (agentName: string | null) => void;
   selectNetworkNode: (id: string | null) => void;
+  selectClaudeItem: (id: string | null) => void;
   setEventsViewMode: (m: "agent" | "chronological") => void;
   setSidebarOpen: (v: boolean) => void;
   toggleSidebarOpen: () => void;
@@ -93,11 +103,29 @@ export const useAppStore = create<AppStore>((set, get) => ({
   agents: [],
   rooms: [],
   agentComms: [],
+  claudeHome: null,
+  claudeSensitive: null,
   fetchErrors: [],
 
   init: () => {
     fetchManifest()
-      .then((manifest) => set({ manifest }))
+      .then((manifest) => {
+        set({ manifest });
+        if (manifest.claudeHome) {
+          fetchClaudeHome(manifest.claudeHome.file)
+            .then((claudeHome) => {
+              set({ claudeHome });
+              if (claudeHome.sensitiveFile) {
+                fetchClaudeSensitive(claudeHome.sensitiveFile)
+                  .then((claudeSensitive) => set({ claudeSensitive }))
+                  .catch((e) =>
+                    set((s) => ({ fetchErrors: [...s.fetchErrors, `Failed to load ~/.claude prompts/secrets: ${e}`] }))
+                  );
+              }
+            })
+            .catch((e) => set((s) => ({ fetchErrors: [...s.fetchErrors, `Failed to load ~/.claude export: ${e}`] })));
+        }
+      })
       .catch((e) => set({ manifestError: String(e) }));
     fetchAgents()
       .then((agents) => set({ agents }))
@@ -119,6 +147,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   selectedRoom: null,
   selectedAgentFeed: null,
   selectedNetworkNode: null,
+  selectedClaudeItem: null,
   eventsViewMode: "agent",
   sidebarOpen: false,
 
@@ -129,6 +158,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       selectedRoom: null,
       selectedAgentFeed: null,
       selectedNetworkNode: null,
+      selectedClaudeItem: null,
       sidebarOpen: false,
     }),
 
@@ -136,6 +166,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   selectRoom: (r) => set({ selectedRoom: r, sidebarOpen: false }),
   selectAgentFeed: (agentName) => set({ selectedAgentFeed: agentName, sidebarOpen: false }),
   selectNetworkNode: (id) => set({ selectedNetworkNode: id }),
+  selectClaudeItem: (id) => set({ selectedClaudeItem: id, sidebarOpen: false }),
   setEventsViewMode: (m) => set({ eventsViewMode: m }),
   setSidebarOpen: (v) => set({ sidebarOpen: v }),
   toggleSidebarOpen: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),

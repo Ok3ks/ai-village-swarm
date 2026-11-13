@@ -1,4 +1,4 @@
-import type { AgentRecord, ChatRoomRecord, CommEdge, Manifest, Tree, TranscriptSummary, Turn } from "./types";
+import type { AgentRecord, ChatRoomRecord, ClaudeHome, ClaudeSensitive, CommEdge, Manifest, Tree, TranscriptSummary, Turn } from "./types";
 
 const dataChunkCache = new Map<string, Promise<Tree[]>>();
 const indexChunkCache = new Map<string, Promise<TranscriptSummary[]>>();
@@ -32,6 +32,26 @@ let agentCommsCache: Promise<CommEdge[]> | null = null;
 export function fetchAgentComms(): Promise<CommEdge[]> {
   if (!agentCommsCache) agentCommsCache = fetchJson<CommEdge[]>("agent_comms.json");
   return agentCommsCache;
+}
+
+let claudeHomeCache: Promise<ClaudeHome> | null = null;
+
+export function fetchClaudeHome(file: string): Promise<ClaudeHome> {
+  if (!claudeHomeCache) claudeHomeCache = fetchJson<ClaudeHome>(file);
+  return claudeHomeCache;
+}
+
+let claudeSensitiveCache: Promise<ClaudeSensitive> | null = null;
+
+export function fetchClaudeSensitive(file: string): Promise<ClaudeSensitive> {
+  if (!claudeSensitiveCache) claudeSensitiveCache = fetchJson<ClaudeSensitive>(file);
+  return claudeSensitiveCache;
+}
+
+export async function fetchText(path: string): Promise<string> {
+  const res = await fetch(`${import.meta.env.BASE_URL}data/${path}`);
+  if (!res.ok) throw new Error(`failed to load ${path}: ${res.status}`);
+  return res.text();
 }
 
 const roomMessageChunkCache = new Map<string, Promise<Turn[]>>();

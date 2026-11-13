@@ -7,7 +7,9 @@ export type TurnKind =
   | "system"
   | "result"
   | "event"
-  | "chat";
+  | "chat"
+  | "config"
+  | "prompt";
 
 export interface Turn {
   id: string;
@@ -74,6 +76,7 @@ export interface Manifest {
   agentComms?: FlatFileManifest;
   roomMessages?: Record<string, { count: number; chunkFiles: string[] }>;
   agentPairMessages?: Record<string, { count: number; chunkFiles: string[] }>;
+  claudeHome?: FlatFileManifest;
 }
 
 export interface CommEdge {
@@ -113,4 +116,123 @@ export interface ChatRoomRecord {
   blacklistedAgentNames: string[] | null;
 }
 
-export type SourceKind = "trees" | "orphans" | "claudeCode" | "rooms" | "events" | "network";
+export type SourceKind =
+  | "trees"
+  | "orphans"
+  | "claudeCode"
+  | "rooms"
+  | "events"
+  | "network"
+  | "claudePreferences"
+  | "claudeStructure"
+  | "claudeProjects"
+  | "claudeConfig";
+
+// ---- ~/.claude export (export_claude_home.py) ----
+
+// "secret": credentials/auth/env captures. "personal": prompts, transcripts,
+// pastes, file snapshots.
+export type Sensitivity = "secret" | "personal";
+
+export interface ClaudeTreeNode {
+  name: string;
+  path: string;
+  isDir: boolean;
+  bytes: number;
+  files: number;
+  mtime?: string;
+  description?: string;
+  sensitivity?: Sensitivity;
+  // Path (under data/) of the file's exported text, when it was small,
+  // text, and the sensitive export was enabled.
+  contentFile?: string;
+  folded?: boolean;
+  children?: ClaudeTreeNode[];
+}
+
+export interface ClaudeSession {
+  id: string;
+  title: string | null;
+  // Flat transcript (data/<file>), present with the sensitive export.
+  file: string | null;
+  // Set on subagent sessions: the session that spawned them.
+  parentId?: string;
+  agentType?: string | null;
+  bytes: number;
+  messages: number;
+  userMessages: number;
+  assistantMessages: number;
+  start: string;
+  end: string;
+}
+
+export interface ClaudeMemory {
+  name: string;
+  description: string;
+  type: string;
+  mtime: string;
+  links: string[];
+  body: string;
+}
+
+export interface ClaudeProject {
+  slug: string;
+  path: string;
+  name: string;
+  bytes: number;
+  sessions: ClaudeSession[];
+  sessionCount: number;
+  memories: ClaudeMemory[];
+  memoryIndex: string | null;
+  promptCount: number;
+  promptsByDay: Record<string, number>;
+  lastActive: string | null;
+}
+
+export interface ClaudeSkill {
+  name: string;
+  description: string;
+  path: string;
+}
+
+export interface ClaudePlugin {
+  name: string;
+  description: string;
+  version?: string | null;
+  path: string;
+  skills: string[];
+  hasMcp: boolean;
+  isMarketplace?: boolean;
+}
+
+export interface ClaudePlan {
+  name: string;
+  title: string;
+  mtime: string;
+  text: string;
+}
+
+export interface ClaudeHome {
+  root: string;
+  exportedAt: string;
+  tree: ClaudeTreeNode;
+  settings: { file: string; settings?: Record<string, unknown>; error?: string; hasSecrets?: boolean }[];
+  sensitiveFile: string | null;
+  claudeMd: string | null;
+  skills: ClaudeSkill[];
+  plugins: ClaudePlugin[];
+  plans: ClaudePlan[];
+  projects: ClaudeProject[];
+}
+
+export interface ClaudePrompt {
+  createdAt: string;
+  sessionId: string | null;
+  text: string;
+  pastes: string[];
+}
+
+export interface ClaudeSensitive {
+  rawSettings: { file: string; settings: Record<string, unknown> }[];
+  prompts: Record<string, ClaudePrompt[]>; // by project slug
+}

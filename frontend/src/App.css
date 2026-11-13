@@ -1016,8 +1016,88 @@ select:focus-visible {
   font-size: 0.78rem;
 }
 
-.network-node {
+.network-node,
+.treemap-cell {
   cursor: pointer;
+}
+
+.treemap-cell:hover rect {
+  stroke: var(--text);
+}
+
+.treemap-cell:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+/* ---------- ~/.claude ---------- */
+/* The one place the UI departs from the single accent: sensitive data
+   (prompts, transcripts, credentials) must stand out wherever it shows. */
+.badge-sensitive {
+  background: color-mix(in srgb, #ff6b6b 18%, var(--bg-sunken));
+  color: #ff9b9b;
+  border: 1px solid color-mix(in srgb, #ff6b6b 45%, transparent);
+  white-space: nowrap;
+}
+
+.sensitive-block {
+  border: 1px solid color-mix(in srgb, #ff6b6b 40%, var(--border));
+  border-radius: 8px;
+  background: var(--bg-raised);
+  padding: 0.75rem 0.9rem;
+}
+
+.sensitive-block .turn-text.concealed {
+  filter: blur(6px);
+  user-select: none;
+  max-height: 12rem;
+  overflow: hidden;
+}
+
+.settings-summary {
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  column-gap: 1.5rem;
+}
+
+.pref-graph {
+  max-width: 720px;
+  align-self: center;
+}
+
+.session-row-sub td:first-child {
+  padding-left: 1.4rem;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.breadcrumb .link-btn + .link-btn::before {
+  content: "/";
+  color: var(--text-muted);
+  margin: 0 0.35rem;
+}
+
+.activity-chart {
+  margin: 0;
+}
+
+.activity-chart figcaption {
+  margin-top: 0.2rem;
 }
 
 .network-detail {
